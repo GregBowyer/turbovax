@@ -41,11 +41,6 @@ set(SOURCE_FILES
     src/VAX/vax_sysdev.cpp
     src/VAX/vax_syslist.cpp
     src/VAX/vaxmod_defs.h
-    src/VMS_STRESS/CC/hw.c
-    src/VMS_STRESS/FILE/file.c
-    src/VMS_STRESS/NUMTIM/numtim.c
-    src/VMS_STRESS/PAGE/page.c
-    src/VMS_VSMP/vsmp.c
     src/scp.cpp
     src/scp.h
     src/sim_aio.cpp
