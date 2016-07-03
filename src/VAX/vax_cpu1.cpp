@@ -73,27 +73,36 @@
 
 #include "vax_cpu.h"
 
-static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_insqti_portable (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_remqti_portable (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_remqhi_portable (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_remqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock* iop);
-static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_insqhi_portable (RUN_DECL, int32 *opnd, int32 acc);
-static int32 op_insqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock* iop);
+static int32 op_insqti_native(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_insqti_portable(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_remqti_native(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_remqti_portable(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_remqhi_native(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_remqhi_portable(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_remqhi_portable_2(RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock *iop);
+
+static int32 op_insqhi_native(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_insqhi_portable(RUN_DECL, int32 *opnd, int32 acc);
+
+static int32 op_insqhi_portable_2(RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock *iop);
 
 
 static const uint8 rcnt[128] = {
- 0, 4, 4, 8, 4, 8, 8,12, 4, 8, 8,12, 8,12,12,16,        /* 00 - 0F */
- 4, 8, 8,12, 8,12,12,16, 8,12,12,16,12,16,16,20,        /* 10 - 1F */
- 4, 8, 8,12, 8,12,12,16, 8,12,12,16,12,16,16,20,        /* 20 - 2F */
- 8,12,12,16,12,16,16,20,12,16,16,20,16,20,20,24,        /* 30 - 3F */
- 4, 8, 8,12, 8,12,12,16, 8,12,12,16,12,16,16,20,        /* 40 - 4F */
- 8,12,12,16,12,16,16,20,12,16,16,20,16,20,20,24,        /* 50 - 5F */
- 8,12,12,16,12,16,16,20,12,16,16,20,16,20,20,24,        /* 60 - 6F */
-12,16,16,20,16,20,20,24,16,20,20,24,20,24,24,28         /* 70 - 7F */
+        0, 4, 4, 8, 4, 8, 8, 12, 4, 8, 8, 12, 8, 12, 12, 16,            /* 00 - 0F */
+        4, 8, 8, 12, 8, 12, 12, 16, 8, 12, 12, 16, 12, 16, 16, 20,      /* 10 - 1F */
+        4, 8, 8, 12, 8, 12, 12, 16, 8, 12, 12, 16, 12, 16, 16, 20,      /* 20 - 2F */
+        8, 12, 12, 16, 12, 16, 16, 20, 12, 16, 16, 20, 16, 20, 20, 24,  /* 30 - 3F */
+        4, 8, 8, 12, 8, 12, 12, 16, 8, 12, 12, 16, 12, 16, 16, 20,      /* 40 - 4F */
+        8, 12, 12, 16, 12, 16, 16, 20, 12, 16, 16, 20, 16, 20, 20, 24,  /* 50 - 5F */
+        8, 12, 12, 16, 12, 16, 16, 20, 12, 16, 16, 20, 16, 20, 20, 24,  /* 60 - 6F */
+        12, 16, 16, 20, 16, 20, 20, 24, 16, 20, 20, 24, 20, 24, 24, 28  /* 70 - 7F */
 };
 
 // int32 last_chm = 0;
@@ -111,38 +120,33 @@ extern DEVICE cpu_dev;
    Returns bit to be tested
 */
 
-int32 op_bb_n (RUN_DECL, int32 *opnd, int32 acc)
-{
-int32 pos = opnd[0];
-int32 rn = opnd[1];
-int32 ea, by;
+int32 op_bb_n(RUN_DECL, int32 *opnd, int32 acc) {
+    int32 pos = opnd[0];
+    int32 rn = opnd[1];
+    int32 ea, by;
 
-if (rn >= 0) {                                          /* register? */
-    if (((uint32) pos) > 31)                            /* pos > 31? fault */
-        RSVD_OPND_FAULT;
-    return (R[rn] >> pos) & 1;                          /* get bit */
+    if (rn >= 0) {                                          /* register? */
+        if (((uint32) pos) > 31)                            /* pos > 31? fault */
+            RSVD_OPND_FAULT;
+        return (R[rn] >> pos) & 1;                          /* get bit */
     }
-ea = opnd[2] + (pos >> 3);                              /* base byte addr */
-pos = pos & 07;                                         /* pos in byte */
-by = Read (RUN_PASS, ea, L_BYTE, RA);                   /* read byte */
-return ((by >> pos) & 1);                               /* get bit */
+    ea = opnd[2] + (pos >> 3);                              /* base byte addr */
+    pos = pos & 07;                                         /* pos in byte */
+    by = Read(RUN_PASS, ea, L_BYTE, RA);                    /* read byte */
+    return ((by >> pos) & 1);                               /* get bit */
 }
 
-int32 op_bb_x (RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked)
-{
+int32 op_bb_x(RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked) {
     // t_bool entering_ilk = FALSE;
 
-    if (interlocked && use_native_interlocked && opnd[1] < 0)
-    {
+    if (interlocked && use_native_interlocked && opnd[1] < 0) {
         int32 pos = opnd[0];
         int32 ea = opnd[2] + (pos >> 3);
-        int32 pa = TestMark (RUN_PASS, ea, WA, NULL);
-        if (ADDR_IS_MEM(pa))
-        {
+        int32 pa = TestMark(RUN_PASS, ea, WA, NULL);
+        if (ADDR_IS_MEM(pa)) {
             /* enter ILK synchronization window for BBSSI */
-            if (newb && (syncw.on & SYNCW_ILK) && !(cpu_unit->syncw_active & SYNCW_ILK) && 
-                PSL_GETIPL(PSL) >= syncw.ipl_resched)
-            {
+            if (newb && (syncw.on & SYNCW_ILK) && !(cpu_unit->syncw_active & SYNCW_ILK) &&
+                PSL_GETIPL(PSL) >= syncw.ipl_resched) {
                 syncw_enter_ilk(RUN_PASS);
                 // entering_ilk = TRUE;
             }
@@ -151,8 +155,7 @@ int32 op_bb_x (RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked)
             int32 bit = smp_native_bb(M, pa, pos & 7, (t_bool) newb);
 
             /* if the bit was already set, pause in presumed BBSSI spinlock acquisition spin-loop... */
-            if (newb && bit)
-            {
+            if (newb && bit) {
                 smp_cpu_relax();
                 /*
                  * It is tempting to back out of ILK if BBSSI does not actually flip the bit.
@@ -188,7 +191,7 @@ int32 op_bb_x (RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked)
         if (((uint32) pos) > 31)                            /* pos > 31? fault */
             RSVD_OPND_FAULT;
         bit = (R[rn] >> pos) & 1;                           /* get bit */
-        R[rn] = newb? (R[rn] | (1u << pos)): (R[rn] & ~(1u << pos));
+        R[rn] = newb ? (R[rn] | (1u << pos)) : (R[rn] & ~(1u << pos));
         return bit;
     }
 
@@ -196,44 +199,41 @@ int32 op_bb_x (RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked)
     if (unlikely(opnd[2] == sys_idle_cpu_mask_va) &&
         sys_idle_cpu_mask_va && mapen &&
         (PSL & PSL_CUR) == 0 && is_os_running(RUN_PASS) &&
-        pos <= 31)
-    {
+        pos <= 31) {
         /* in VMS, only BBSC, CLRL and BICL2 will actually clear bits in the idle mask */
         b_sys_mask = TRUE;
-        old_sys_mask = Read (RUN_PASS, sys_idle_cpu_mask_va, L_LONG, RA);
+        old_sys_mask = Read(RUN_PASS, sys_idle_cpu_mask_va, L_LONG, RA);
         sys_pos = pos;
     }
 
     ea = opnd[2] + (pos >> 3);                              /* base byte addr */
     pos = pos & 07;                                         /* pos in byte */
-    if (interlocked)  iop.virt_lock(ea, acc);               /* base longword will be interlocked by iop.lock(), not target byte */
-    by = Read (RUN_PASS, ea, L_BYTE, WA);                   /* read byte */
+    if (interlocked)
+        iop.virt_lock(ea, acc);               /* base longword will be interlocked by iop.lock(), not target byte */
+    by = Read(RUN_PASS, ea, L_BYTE, WA);                   /* read byte */
     bit = (by >> pos) & 1;                                  /* get bit */
 
     /* enter ILK synchronization window for BBSSI, but will stay there only if BBSSI actually flips the bit */
-    if (interlocked && newb && (syncw.on & SYNCW_ILK) && !(cpu_unit->syncw_active & SYNCW_ILK))
-    {
+    if (interlocked && newb && (syncw.on & SYNCW_ILK) && !(cpu_unit->syncw_active & SYNCW_ILK)) {
         syncw_enter_ilk(RUN_PASS);
         // entering_ilk = TRUE;
     }
 
     by = newb ? (by | (1u << pos)) : (by & ~(1u << pos));   /* change bit */
     iop.wmb = TRUE;
-    Write (RUN_PASS, ea, by, L_BYTE, WA);                   /* rewrite byte */
+    Write(RUN_PASS, ea, by, L_BYTE, WA);                   /* rewrite byte */
 
     iop.unlock();
 
     /* If bits in VMS CPU idle mask were cleared, wake up corresponding CPUs */
-    if (unlikely(b_sys_mask))
-    {
-        uint32 new_sys_mask = newb ? (old_sys_mask | (1u << sys_pos)) : 
-                                     (old_sys_mask & ~(1u << sys_pos));
+    if (unlikely(b_sys_mask)) {
+        uint32 new_sys_mask = newb ? (old_sys_mask | (1u << sys_pos)) :
+                              (old_sys_mask & ~(1u << sys_pos));
         wakeup_cpus(RUN_PASS, old_sys_mask, new_sys_mask);
     }
 
     /* if the bit was already set, pause in presumed BBSSI spinlock acquisition spin-loop... */
-    if (interlocked && newb && bit)
-    {
+    if (interlocked && newb && bit) {
         smp_cpu_relax();
         /* Do NOT back out of ILK (see comment above) */
         // if (FALSE && entering_ilk)
@@ -253,37 +253,36 @@ int32 op_bb_x (RUN_DECL, int32 *opnd, int32 newb, int32 acc, t_bool interlocked)
    If the field is in a register, rn + 1 is in vfldrp1
 */
 
-int32 op_extv (RUN_DECL, int32 *opnd, int32 vfldrp1, int32 acc)
-{
-int32 pos = opnd[0];
-int32 size = opnd[1];
-int32 rn = opnd[2];
-uint32 wd = opnd[3];
-int32 ba, wd1 = 0;
+int32 op_extv(RUN_DECL, int32 *opnd, int32 vfldrp1, int32 acc) {
+    int32 pos = opnd[0];
+    int32 size = opnd[1];
+    int32 rn = opnd[2];
+    uint32 wd = opnd[3];
+    int32 ba, wd1 = 0;
 
-if (size == 0)                                          /* size 0? field = 0 */
-    return 0;
-if (size > 32)                                          /* size > 32? fault */
-    RSVD_OPND_FAULT;
-if (rn >= 0) {                                          /* register? */
-    if (((uint32) pos) > 31)                            /* pos > 31? fault */
+    if (size == 0)                                          /* size 0? field = 0 */
+        return 0;
+    if (size > 32)                                          /* size > 32? fault */
         RSVD_OPND_FAULT;
-    if (((pos + size) > 32) && (rn >= nSP))             /* span 2 reg, PC? */
-        RSVD_ADDR_FAULT;                                /* fault */
-    if (pos)
-        wd = (wd >> pos) | (((uint32) vfldrp1) << (32 - pos));
+    if (rn >= 0) {                                          /* register? */
+        if (((uint32) pos) > 31)                            /* pos > 31? fault */
+            RSVD_OPND_FAULT;
+        if (((pos + size) > 32) && (rn >= nSP))             /* span 2 reg, PC? */
+            RSVD_ADDR_FAULT;                                /* fault */
+        if (pos)
+            wd = (wd >> pos) | (((uint32) vfldrp1) << (32 - pos));
     }
-else {
-    ba = wd + (pos >> 3);                               /* base byte addr */
-    pos = (pos & 07) | ((ba & 03) << 3);                /* bit offset */
-    ba = ba & ~03;                                      /* lw align base */
-    wd = Read (RUN_PASS, ba, L_LONG, RA);               /* read field */
-    if ((size + pos) > 32)
-        wd1 = Read (RUN_PASS, ba + 4, L_LONG, RA);
-    if (pos)
-        wd = (wd >> pos) | (((uint32) wd1) << (32 - pos));
+    else {
+        ba = wd + (pos >> 3);                               /* base byte addr */
+        pos = (pos & 07) | ((ba & 03) << 3);                /* bit offset */
+        ba = ba & ~03;                                      /* lw align base */
+        wd = Read(RUN_PASS, ba, L_LONG, RA);               /* read field */
+        if ((size + pos) > 32)
+            wd1 = Read(RUN_PASS, ba + 4, L_LONG, RA);
+        if (pos)
+            wd = (wd >> pos) | (((uint32) wd1) << (32 - pos));
     }
-return wd & byte_mask[size];
+    return wd & byte_mask[size];
 }
 
 /* Insert field
@@ -297,61 +296,59 @@ return wd & byte_mask[size];
    If the field is in a register, rn + 1 is in vfldrp1
 */
 
-void op_insv (RUN_DECL, int32 *opnd, int32 vfldrp1, int32 acc)
-{
-uint32 ins = opnd[0];
-int32 pos = opnd[1];
-int32 size = opnd[2];
-int32 rn = opnd[3];
-int32 val, mask, ba, wd, wd1;
+void op_insv(RUN_DECL, int32 *opnd, int32 vfldrp1, int32 acc) {
+    uint32 ins = opnd[0];
+    int32 pos = opnd[1];
+    int32 size = opnd[2];
+    int32 rn = opnd[3];
+    int32 val, mask, ba, wd, wd1;
 
-if (size == 0)                                          /* size = 0? done */
-    return;
-if (size > 32)                                          /* size > 32? fault */
-    RSVD_OPND_FAULT;
-if (rn >= 0) {                                          /* in registers? */
-    if (((uint32) pos) > 31)                            /* pos > 31? fault */
+    if (size == 0)                                          /* size = 0? done */
+        return;
+    if (size > 32)                                          /* size > 32? fault */
         RSVD_OPND_FAULT;
-    if ((pos + size) > 32) {                            /* span two reg? */
-        if (rn >= nSP)                                  /* if PC, fault */
-            RSVD_ADDR_FAULT;
-        mask = byte_mask[pos + size - 32];              /* insert fragment */
-        val = ins >> (32 - pos);
-        R[rn + 1] = (vfldrp1 & ~mask) | (val & mask);
+    if (rn >= 0) {                                          /* in registers? */
+        if (((uint32) pos) > 31)                            /* pos > 31? fault */
+            RSVD_OPND_FAULT;
+        if ((pos + size) > 32) {                            /* span two reg? */
+            if (rn >= nSP)                                  /* if PC, fault */
+                RSVD_ADDR_FAULT;
+            mask = byte_mask[pos + size - 32];              /* insert fragment */
+            val = ins >> (32 - pos);
+            R[rn + 1] = (vfldrp1 & ~mask) | (val & mask);
         }
-    mask = byte_mask[size] << pos;                      /* insert field */
-    val = ins << pos;
-    R[rn] = (R[rn] & ~mask) | (val & mask);
+        mask = byte_mask[size] << pos;                      /* insert field */
+        val = ins << pos;
+        R[rn] = (R[rn] & ~mask) | (val & mask);
     }
-else {
-    ba = opnd[4] + (pos >> 3);                          /* base byte addr */
-    pos = (pos & 07) | ((ba & 03) << 3);                /* bit offset */
-    ba = ba & ~03;                                      /* lw align base */
-    wd = Read (RUN_PASS, ba, L_LONG, WA);               /* read field */
-    if ((size + pos) > 32) {                            /* field span lw? */
-        wd1 = Read (RUN_PASS, ba + 4, L_LONG, WA);      /* read 2nd lw */
-        mask = byte_mask[pos + size - 32];              /* insert fragment */
-        val = ins >> (32 - pos);
-        Write (RUN_PASS, ba + 4, (wd1 & ~mask) | (val & mask), L_LONG, WA);
+    else {
+        ba = opnd[4] + (pos >> 3);                          /* base byte addr */
+        pos = (pos & 07) | ((ba & 03) << 3);                /* bit offset */
+        ba = ba & ~03;                                      /* lw align base */
+        wd = Read(RUN_PASS, ba, L_LONG, WA);               /* read field */
+        if ((size + pos) > 32) {                            /* field span lw? */
+            wd1 = Read(RUN_PASS, ba + 4, L_LONG, WA);      /* read 2nd lw */
+            mask = byte_mask[pos + size - 32];              /* insert fragment */
+            val = ins >> (32 - pos);
+            Write(RUN_PASS, ba + 4, (wd1 & ~mask) | (val & mask), L_LONG, WA);
         }
-    mask = byte_mask[size] << pos;                      /* insert field */
-    val = ins << pos;
-    Write (RUN_PASS, ba, (wd & ~mask) | (val & mask), L_LONG, WA);
+        mask = byte_mask[size] << pos;                      /* insert field */
+        val = ins << pos;
+        Write(RUN_PASS, ba, (wd & ~mask) | (val & mask), L_LONG, WA);
     }
-return;
+    return;
 }
 
 /* Find first */
 
-int32 op_ffs (RUN_DECL, uint32 wd, int32 size)
-{
-int32 i;
+int32 op_ffs(RUN_DECL, uint32 wd, int32 size) {
+    int32 i;
 
-for (i = 0; wd; i++, wd = wd >> 1) {
-    if (wd & 1)
-        return i;
+    for (i = 0; wd; i++, wd = wd >> 1) {
+        if (wd & 1)
+            return i;
     }
-return size;
+    return size;
 }
 
 #define CALL_DV         0x8000                          /* DV set */
@@ -436,148 +433,145 @@ return size;
                 update PSW traps, clear condition codes
 */
 
-int32 op_call (RUN_DECL, int32 *opnd, t_bool gs, int32 acc)
-{
-int32 addr = opnd[1];
-int32 mask, stklen, tsp, wd;
+int32 op_call(RUN_DECL, int32 *opnd, t_bool gs, int32 acc) {
+    int32 addr = opnd[1];
+    int32 mask, stklen, tsp, wd;
 
-mask = Read (RUN_PASS, addr, L_WORD, RA);               /* get proc mask */
-if (mask & CALL_MBZ)                                    /* test mbz */
-    RSVD_OPND_FAULT;
-stklen = rcnt[mask & 077] + rcnt[(mask >> 6) & 077] + (gs? 24: 20);
-Read (RUN_PASS, SP - stklen, L_BYTE, WA);               /* wchk stk */
-if (gs) {
-    Write (RUN_PASS, SP - 4, opnd[0], L_LONG, WA);      /* if S, push #arg */
-    SP = SP - 4;                                        /* stack is valid */
+    mask = Read(RUN_PASS, addr, L_WORD, RA);               /* get proc mask */
+    if (mask & CALL_MBZ)                                    /* test mbz */
+        RSVD_OPND_FAULT;
+    stklen = rcnt[mask & 077] + rcnt[(mask >> 6) & 077] + (gs ? 24 : 20);
+    Read(RUN_PASS, SP - stklen, L_BYTE, WA);               /* wchk stk */
+    if (gs) {
+        Write(RUN_PASS, SP - 4, opnd[0], L_LONG, WA);      /* if S, push #arg */
+        SP = SP - 4;                                        /* stack is valid */
     }
-tsp = SP & ~CALL_M_SPA;                                 /* lw align stack */
-CALL_PUSH (11);                                         /* check mask bits, */
-CALL_PUSH (10);                                         /* push sel reg */
-CALL_PUSH (9);
-CALL_PUSH (8);
-CALL_PUSH (7);
-CALL_PUSH (6);
-CALL_PUSH (5);
-CALL_PUSH (4);
-CALL_PUSH (3);
-CALL_PUSH (2);
-CALL_PUSH (1);
-CALL_PUSH (0);
-Write (RUN_PASS, tsp - 4, PC, L_LONG, WA);              /* push PC */
-Write (RUN_PASS, tsp - 8, FP, L_LONG, WA);              /* push AP */
-Write (RUN_PASS, tsp - 12, AP, L_LONG, WA);             /* push FP */
-wd = ((SP & CALL_M_SPA) << CALL_V_SPA) | (gs << CALL_V_S) |
-    ((mask & CALL_MASK) << CALL_V_MASK) | (PSL & 0xFFE0);
-Write (RUN_PASS, tsp - 16, wd, L_LONG, WA);                       /* push spa/s/mask/psw */
-Write (RUN_PASS, tsp - 20, 0, L_LONG, WA);                        /* push cond hdlr */
-if (gs)                                                 /* update AP */
-    AP = SP;
-else AP = opnd[0];
-SP = FP = tsp - 20;                                     /* update FP, SP */
-PSL = (PSL & ~(PSW_DV | PSW_FU | PSW_IV)) |             /* update PSW */
-    ((mask & CALL_DV)? PSW_DV: 0) |
-    ((mask & CALL_IV)? PSW_IV: 0);
-JUMP (addr + 2);                                        /* new PC */
-return 0;                                               /* new cc's */
+    tsp = SP & ~CALL_M_SPA;                                 /* lw align stack */
+    CALL_PUSH (11);                                         /* check mask bits, */
+    CALL_PUSH (10);                                         /* push sel reg */
+    CALL_PUSH (9);
+    CALL_PUSH (8);
+    CALL_PUSH (7);
+    CALL_PUSH (6);
+    CALL_PUSH (5);
+    CALL_PUSH (4);
+    CALL_PUSH (3);
+    CALL_PUSH (2);
+    CALL_PUSH (1);
+    CALL_PUSH (0);
+    Write(RUN_PASS, tsp - 4, PC, L_LONG, WA);              /* push PC */
+    Write(RUN_PASS, tsp - 8, FP, L_LONG, WA);              /* push AP */
+    Write(RUN_PASS, tsp - 12, AP, L_LONG, WA);             /* push FP */
+    wd = ((SP & CALL_M_SPA) << CALL_V_SPA) | (gs << CALL_V_S) |
+         ((mask & CALL_MASK) << CALL_V_MASK) | (PSL & 0xFFE0);
+    Write(RUN_PASS, tsp - 16, wd, L_LONG, WA);                       /* push spa/s/mask/psw */
+    Write(RUN_PASS, tsp - 20, 0, L_LONG, WA);                        /* push cond hdlr */
+    if (gs)                                                 /* update AP */
+        AP = SP;
+    else
+        AP = opnd[0];
+    SP = FP = tsp - 20;                                     /* update FP, SP */
+    PSL = (PSL & ~(PSW_DV | PSW_FU | PSW_IV)) |             /* update PSW */
+          ((mask & CALL_DV) ? PSW_DV : 0) |
+          ((mask & CALL_IV) ? PSW_IV : 0);
+    JUMP (addr + 2);                                        /* new PC */
+    return 0;                                               /* new cc's */
 }
 
-int32 op_ret (RUN_DECL, int32 acc)
-{
-int32 spamask, stklen, newpc, nargs;
-int32 tsp = FP;
+int32 op_ret(RUN_DECL, int32 acc) {
+    int32 spamask, stklen, newpc, nargs;
+    int32 tsp = FP;
 
-spamask = Read (RUN_PASS, tsp + 4, L_LONG, RA);         /* spa/s/mask/psw */
-if (spamask & PSW_MBZ)                                  /* test mbz */
-    RSVD_OPND_FAULT;
-stklen = rcnt[(spamask >> CALL_V_MASK) & 077] +
-    rcnt[(spamask >> (CALL_V_MASK + 6)) & 077] + ((spamask & CALL_S)? 23: 19);
-Read (RUN_PASS, tsp + stklen, L_BYTE, RA);              /* rchk stk end */
-AP = Read (RUN_PASS, tsp + 8, L_LONG, RA);              /* restore AP */
-FP = Read (RUN_PASS, tsp + 12, L_LONG, RA);             /* restore FP */
-newpc = Read (RUN_PASS, tsp + 16, L_LONG, RA);          /* get new PC */
-tsp = tsp + 20;                                         /* update stk ptr */
-RET_POP (0);                                            /* chk mask bits, */
-RET_POP (1);                                            /* pop sel regs */
-RET_POP (2);
-RET_POP (3);
-RET_POP (4);
-RET_POP (5);
-RET_POP (6);
-RET_POP (7);
-RET_POP (8);
-RET_POP (9);
-RET_POP (10);
-RET_POP (11);
-SP = tsp + CALL_GETSPA (spamask);                       /* dealign stack */
-if (spamask & CALL_S) {                                 /* CALLS? */
-    nargs = Read (RUN_PASS, SP, L_LONG, RA);            /* read #args */
-    SP = SP + 4 + ((nargs & BMASK) << 2);               /* pop arg list */
+    spamask = Read(RUN_PASS, tsp + 4, L_LONG, RA);         /* spa/s/mask/psw */
+    if (spamask & PSW_MBZ)                                  /* test mbz */
+        RSVD_OPND_FAULT;
+    stklen = rcnt[(spamask >> CALL_V_MASK) & 077] +
+             rcnt[(spamask >> (CALL_V_MASK + 6)) & 077] + ((spamask & CALL_S) ? 23 : 19);
+    Read(RUN_PASS, tsp + stklen, L_BYTE, RA);              /* rchk stk end */
+    AP = Read(RUN_PASS, tsp + 8, L_LONG, RA);              /* restore AP */
+    FP = Read(RUN_PASS, tsp + 12, L_LONG, RA);             /* restore FP */
+    newpc = Read(RUN_PASS, tsp + 16, L_LONG, RA);          /* get new PC */
+    tsp = tsp + 20;                                         /* update stk ptr */
+    RET_POP (0);                                            /* chk mask bits, */
+    RET_POP (1);                                            /* pop sel regs */
+    RET_POP (2);
+    RET_POP (3);
+    RET_POP (4);
+    RET_POP (5);
+    RET_POP (6);
+    RET_POP (7);
+    RET_POP (8);
+    RET_POP (9);
+    RET_POP (10);
+    RET_POP (11);
+    SP = tsp + CALL_GETSPA (spamask);                       /* dealign stack */
+    if (spamask & CALL_S) {                                 /* CALLS? */
+        nargs = Read(RUN_PASS, SP, L_LONG, RA);            /* read #args */
+        SP = SP + 4 + ((nargs & BMASK) << 2);               /* pop arg list */
     }
-PSL = (PSL & ~(PSW_DV | PSW_FU | PSW_IV | PSW_T)) |     /* reset PSW */
-    (spamask & (PSW_DV | PSW_FU | PSW_IV | PSW_T));
-JUMP (newpc);                                           /* set new PC */
-return spamask & (CC_MASK);                             /* return cc's */
+    PSL = (PSL & ~(PSW_DV | PSW_FU | PSW_IV | PSW_T)) |     /* reset PSW */
+          (spamask & (PSW_DV | PSW_FU | PSW_IV | PSW_T));
+    JUMP (newpc);                                           /* set new PC */
+    return spamask & (CC_MASK);                             /* return cc's */
 }
 
 /* PUSHR and POPR */
 
-void op_pushr (RUN_DECL, int32 *opnd, int32 acc)
-{
-int32 mask = opnd[0] & 0x7FFF;
-int32 stklen, tsp;
+void op_pushr(RUN_DECL, int32 *opnd, int32 acc) {
+    int32 mask = opnd[0] & 0x7FFF;
+    int32 stklen, tsp;
 
-if (mask == 0)
+    if (mask == 0)
+        return;
+    stklen = rcnt[(mask >> 7) & 0177] + rcnt[mask & 0177] +
+             ((mask & 0x4000) ? 4 : 0);
+    Read(RUN_PASS, SP - stklen, L_BYTE, WA);               /* wchk stk end */
+    tsp = SP;                                               /* temp stk ptr */
+    PUSHR_PUSH (14);                                        /* check mask bits, */
+    PUSHR_PUSH (13);                                        /* push sel reg */
+    PUSHR_PUSH (12);
+    PUSHR_PUSH (11);
+    PUSHR_PUSH (10);
+    PUSHR_PUSH (9);
+    PUSHR_PUSH (8);
+    PUSHR_PUSH (7);
+    PUSHR_PUSH (6);
+    PUSHR_PUSH (5);
+    PUSHR_PUSH (4);
+    PUSHR_PUSH (3);
+    PUSHR_PUSH (2);
+    PUSHR_PUSH (1);
+    PUSHR_PUSH (0);
+    SP = tsp;                                               /* update stk ptr */
     return;
-stklen = rcnt[(mask >> 7) & 0177] + rcnt[mask & 0177] +
-    ((mask & 0x4000)? 4: 0);
-Read (RUN_PASS, SP - stklen, L_BYTE, WA);               /* wchk stk end */
-tsp = SP;                                               /* temp stk ptr */
-PUSHR_PUSH (14);                                        /* check mask bits, */
-PUSHR_PUSH (13);                                        /* push sel reg */
-PUSHR_PUSH (12);
-PUSHR_PUSH (11);
-PUSHR_PUSH (10);
-PUSHR_PUSH (9);
-PUSHR_PUSH (8);
-PUSHR_PUSH (7);
-PUSHR_PUSH (6);
-PUSHR_PUSH (5);
-PUSHR_PUSH (4);
-PUSHR_PUSH (3);
-PUSHR_PUSH (2);
-PUSHR_PUSH (1);
-PUSHR_PUSH (0);
-SP = tsp;                                               /* update stk ptr */
-return;
 }
 
-void op_popr (RUN_DECL, int32 *opnd, int32 acc)
-{
-int32 mask = opnd[0] & 0x7FFF;
-int32 stklen;
+void op_popr(RUN_DECL, int32 *opnd, int32 acc) {
+    int32 mask = opnd[0] & 0x7FFF;
+    int32 stklen;
 
-if (mask == 0)
+    if (mask == 0)
+        return;
+    stklen = rcnt[(mask >> 7) & 0177] + rcnt[mask & 0177] +
+             ((mask & 0x4000) ? 4 : 0);
+    Read(RUN_PASS, SP + stklen - 1, L_BYTE, RA);           /* rchk stk end */
+    POPR_POP (0);                                           /* check mask bits, */
+    POPR_POP (1);                                           /* pop sel regs */
+    POPR_POP (2);
+    POPR_POP (3);
+    POPR_POP (4);
+    POPR_POP (5);
+    POPR_POP (6);
+    POPR_POP (7);
+    POPR_POP (8);
+    POPR_POP (9);
+    POPR_POP (10);
+    POPR_POP (11);
+    POPR_POP (12);
+    POPR_POP (13);
+    if (mask & 0x4000)                                      /* if pop SP, no inc */
+        SP = Read(RUN_PASS, SP, L_LONG, RA);
     return;
-stklen = rcnt[(mask >> 7) & 0177] + rcnt[mask & 0177] +
-    ((mask & 0x4000)? 4: 0);
-Read (RUN_PASS, SP + stklen - 1, L_BYTE, RA);           /* rchk stk end */
-POPR_POP (0);                                           /* check mask bits, */
-POPR_POP (1);                                           /* pop sel regs */
-POPR_POP (2);
-POPR_POP (3);
-POPR_POP (4);
-POPR_POP (5);
-POPR_POP (6);
-POPR_POP (7);
-POPR_POP (8);
-POPR_POP (9);
-POPR_POP (10);
-POPR_POP (11);
-POPR_POP (12);
-POPR_POP (13);
-if (mask & 0x4000)                                      /* if pop SP, no inc */
-    SP = Read (RUN_PASS, SP, L_LONG, RA);
-return;
 }
 
 
@@ -606,21 +600,20 @@ return;
    might be misaligned.
 */
 
-int32 op_insque (RUN_DECL, int32 *opnd, int32 acc)
-{
-int32 p = opnd[1];
-int32 e = opnd[0];
-int32 s, cc;
+int32 op_insque(RUN_DECL, int32 *opnd, int32 acc) {
+    int32 p = opnd[1];
+    int32 e = opnd[0];
+    int32 s, cc;
 
-s = Read (RUN_PASS, p, L_LONG, WA);                     /* s <- (p), wchk */
-Read (RUN_PASS, s + 4, L_LONG, WA);                     /* wchk s+4 */
-Read (RUN_PASS, e + 4, L_LONG, WA);                     /* wchk e+4 */
-Write (RUN_PASS, e, s, L_LONG, WA);                     /* (e) <- s */
-Write (RUN_PASS, e + 4, p, L_LONG, WA);                 /* (e+4) <- p */
-Write (RUN_PASS, s + 4, e, L_LONG, WA);                 /* (s+4) <- ent */
-Write (RUN_PASS, p, e, L_LONG, WA);                     /* (p) <- e */
-CC_CMP_L (s, p);                                        /* set cc's */
-return cc;
+    s = Read(RUN_PASS, p, L_LONG, WA);                     /* s <- (p), wchk */
+    Read(RUN_PASS, s + 4, L_LONG, WA);                     /* wchk s+4 */
+    Read(RUN_PASS, e + 4, L_LONG, WA);                     /* wchk e+4 */
+    Write(RUN_PASS, e, s, L_LONG, WA);                     /* (e) <- s */
+    Write(RUN_PASS, e + 4, p, L_LONG, WA);                 /* (e+4) <- p */
+    Write(RUN_PASS, s + 4, e, L_LONG, WA);                 /* (s+4) <- ent */
+    Write(RUN_PASS, p, e, L_LONG, WA);                     /* (p) <- e */
+    CC_CMP_L (s, p);                                        /* set cc's */
+    return cc;
 }
 
 /* REMQUE
@@ -646,26 +639,25 @@ return cc;
 
 */
 
-int32 op_remque (RUN_DECL, int32 *opnd, int32 acc)
-{
-int32 e = opnd[0];
-int32 s, p, cc;
+int32 op_remque(RUN_DECL, int32 *opnd, int32 acc) {
+    int32 e = opnd[0];
+    int32 s, p, cc;
 
-s = Read (RUN_PASS, e, L_LONG, RA);                     /* s <- (e) */
-p = Read (RUN_PASS, e + 4, L_LONG, RA);                 /* p <- (e+4) */
-CC_CMP_L (s, p);                                        /* set cc's */
-if (e != p) {                                           /* queue !empty? */
-    Read (RUN_PASS, s + 4, L_LONG, WA);                 /* wchk (s+4) */
-    if (opnd[1] < 0)                                    /* wchk dest */
-        Read (RUN_PASS, opnd[2], L_LONG, WA);
-    Write (RUN_PASS, p, s, L_LONG, WA);                 /* (p) <- s */
-    Write (RUN_PASS, s + 4, p, L_LONG, WA);             /* (s+4) <- p */
+    s = Read(RUN_PASS, e, L_LONG, RA);                     /* s <- (e) */
+    p = Read(RUN_PASS, e + 4, L_LONG, RA);                 /* p <- (e+4) */
+    CC_CMP_L (s, p);                                        /* set cc's */
+    if (e != p) {                                           /* queue !empty? */
+        Read(RUN_PASS, s + 4, L_LONG, WA);                 /* wchk (s+4) */
+        if (opnd[1] < 0)                                    /* wchk dest */
+            Read(RUN_PASS, opnd[2], L_LONG, WA);
+        Write(RUN_PASS, p, s, L_LONG, WA);                 /* (p) <- s */
+        Write(RUN_PASS, s + 4, p, L_LONG, WA);             /* (s+4) <- p */
     }
-else cc = cc | CC_V;                                    /* else set v */
-if (opnd[1] >= 0)                                       /* store result */
-    R[opnd[1]] = e;
-else Write (RUN_PASS, opnd[2], e, L_LONG, WA);
-return cc;
+    else cc = cc | CC_V;                                    /* else set v */
+    if (opnd[1] >= 0)                                       /* store result */
+        R[opnd[1]] = e;
+    else Write(RUN_PASS, opnd[2], e, L_LONG, WA);
+    return cc;
 }
 
 /* Interlocked insert instructions
@@ -698,16 +690,14 @@ return cc;
         not be equal.
 */
 
-int32 op_insqhi (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_insqhi(RUN_DECL, int32 *opnd, int32 acc) {
     if (use_native_interlocked)
         return op_insqhi_native(RUN_PASS, opnd, acc);
     else
         return op_insqhi_portable(RUN_PASS, opnd, acc);
 }
 
-static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_insqhi_native(RUN_DECL, int32 *opnd, int32 acc) {
     int32 pa_h1, pa_d1, pa_d2, pa_a2;
     int32 d = opnd[0];
     int32 h = opnd[1];
@@ -724,23 +714,21 @@ static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc)
      * therefore it cannot cross page boundary and hence
      * pa_d2 is in the same page as pa_d1
      */
-    pa_h1 = TestMark (RUN_PASS, h, WA, NULL);
-    pa_d1 = TestMark (RUN_PASS, d, WA, NULL);
+    pa_h1 = TestMark(RUN_PASS, h, WA, NULL);
+    pa_d1 = TestMark(RUN_PASS, d, WA, NULL);
     pa_d2 = pa_d1 + 4;
 
     /* must be in memory (not IO space): do not need to test pa_d2 */
-    if (! (ADDR_IS_MEM(pa_h1) && ADDR_IS_MEM(pa_d1)))
+    if (!(ADDR_IS_MEM(pa_h1) && ADDR_IS_MEM(pa_d1)))
         RSVD_OPND_FAULT;
 
-    sim_try
-    {
+    sim_try {
         /* elevate thread priority if required */
         iop.prio_lock();
 
         /* acquire secondary interlock */
         smp_pre_interlocked_mb();
-        if (smp_native_bb(M, pa_h1, 0, TRUE))
-        {
+        if (smp_native_bb(M, pa_h1, 0, TRUE)) {
             iop.qxi_busy();
             smp_cpu_relax();
             return CC_C;
@@ -754,7 +742,7 @@ static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc)
         if (a & 06)                                         /* check quad align */
             RSVD_OPND_FAULT;
 
-        pa_a2 = TestMark (RUN_PASS, a + 4, WA, NULL);       /* make sure it is valid */
+        pa_a2 = TestMark(RUN_PASS, a + 4, WA, NULL);       /* make sure it is valid */
         if (!ADDR_IS_MEM(pa_a2))
             RSVD_OPND_FAULT;
 
@@ -763,18 +751,16 @@ static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc)
         WriteLP(RUN_PASS, pa_d2, h - d);
 
         /* store forward link and release secondary interlock */
-        smp_interlocked_uint32* vpa_h1 = (smp_interlocked_uint32*) ((t_byte*) M + pa_h1);
-        while (! smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (d - h)))  ;
+        smp_interlocked_uint32 *vpa_h1 = (smp_interlocked_uint32 *) ((t_byte *) M + pa_h1);
+        while (!smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (d - h)));
         release = FALSE;
         smp_post_interlocked_mb();
 
         return (a == h) ? CC_Z : 0;                         /* Z = 1 if a = h */
     }
-    sim_catch_all
-    {
+    sim_catch_all {
         /* release secondary interlock and re-throw */
-        if (release)
-        {
+        if (release) {
             smp_native_bb(M, pa_h1, 0, FALSE);
             smp_post_interlocked_mb();
         }
@@ -785,23 +771,21 @@ static int32 op_insqhi_native (RUN_DECL, int32 *opnd, int32 acc)
     sim_noreturn_int32;
 }
 
-static int32 op_insqhi_portable (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_insqhi_portable(RUN_DECL, int32 *opnd, int32 acc) {
     sim_try_volatile InterlockedOpLock iop(RUN_PASS, IOP_ILK);
-    return op_insqhi_portable_2 (RUN_PASS, opnd, acc, &iop);
+    return op_insqhi_portable_2(RUN_PASS, opnd, acc, &iop);
 }
 
-static int32 op_insqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock* iop)
-{
+static int32 op_insqhi_portable_2(RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock *iop) {
     int32 h = opnd[1];
     int32 d = opnd[0];
     int32 a, t;
 
     if ((h == d) || ((h | d) & 07))                         /* h, d quad align? */
         RSVD_OPND_FAULT;
-    Read (RUN_PASS, d, L_BYTE, WA);                         /* wchk ent */
+    Read(RUN_PASS, d, L_BYTE, WA);                         /* wchk ent */
     iop->virt_lock(h, acc);
-    a = Read (RUN_PASS, h, L_LONG, WA);                     /* a <- (h), wchk */
+    a = Read(RUN_PASS, h, L_LONG, WA);                     /* a <- (h), wchk */
     if (a & 06)                                             /* chk quad align */
         RSVD_OPND_FAULT;
     if (a & 01)                                             /* busy, cc = 0001 */
@@ -810,28 +794,26 @@ static int32 op_insqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_vol
         return CC_C;
     }
     iop->wmb = TRUE;
-    Write (RUN_PASS, h, a | 1, L_LONG, WA);                 /* get interlock */
+    Write(RUN_PASS, h, a | 1, L_LONG, WA);                 /* get interlock */
     a = a + h;                                              /* abs addr of a */
-    if (Test (RUN_PASS, a, WA, &t) < 0)                     /* wtst a, rls if err */
-        Write (RUN_PASS, h, a - h, L_LONG, WA);
-    Write (RUN_PASS, a + 4, d - a, L_LONG, WA);             /* (a+4) <- d-a, flt ok */
-    Write (RUN_PASS, d, a - d, L_LONG, WA);                 /* (d) <- a-d */
-    Write (RUN_PASS, d + 4, h - d, L_LONG, WA);             /* (d+4) <- h-d */
-    Write (RUN_PASS, h, d - h, L_LONG, WA);                 /* (h) <- d-h, rls int */
+    if (Test(RUN_PASS, a, WA, &t) < 0)                     /* wtst a, rls if err */
+        Write(RUN_PASS, h, a - h, L_LONG, WA);
+    Write(RUN_PASS, a + 4, d - a, L_LONG, WA);             /* (a+4) <- d-a, flt ok */
+    Write(RUN_PASS, d, a - d, L_LONG, WA);                 /* (d) <- a-d */
+    Write(RUN_PASS, d + 4, h - d, L_LONG, WA);             /* (d+4) <- h-d */
+    Write(RUN_PASS, h, d - h, L_LONG, WA);                 /* (h) <- d-h, rls int */
 
-    return (a == h)? CC_Z: 0;                               /* Z = 1 if a = h */
+    return (a == h) ? CC_Z : 0;                               /* Z = 1 if a = h */
 }
 
-int32 op_insqti (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_insqti(RUN_DECL, int32 *opnd, int32 acc) {
     if (use_native_interlocked)
         return op_insqti_native(RUN_PASS, opnd, acc);
     else
         return op_insqti_portable(RUN_PASS, opnd, acc);
 }
 
-static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_insqti_native(RUN_DECL, int32 *opnd, int32 acc) {
     int32 d = opnd[0];
     int32 h = opnd[1];
     int32 pa_c1, pa_d1, pa_d2, pa_h1, pa_h2;
@@ -847,25 +829,23 @@ static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc)
      * therefore it cannot cross page boundary and hence
      * pa_h2 is in the same page as pa_h1
      */
-    pa_h1 = TestMark (RUN_PASS, h, WA, NULL);
+    pa_h1 = TestMark(RUN_PASS, h, WA, NULL);
     pa_h2 = pa_h1 + 4;
 
-    pa_d1 = TestMark (RUN_PASS, d, WA, NULL);
+    pa_d1 = TestMark(RUN_PASS, d, WA, NULL);
     pa_d2 = pa_d1 + 4;
 
     /* must be in memory (not IO space): do not need to test pa_h2 and pa_d2 */
-    if (! (ADDR_IS_MEM(pa_h1) && ADDR_IS_MEM(pa_d1)))
+    if (!(ADDR_IS_MEM(pa_h1) && ADDR_IS_MEM(pa_d1)))
         RSVD_OPND_FAULT;
 
-    sim_try
-    {
+    sim_try {
         /* elevate thread priority if required */
         iop.prio_lock();
 
         /* acquire secondary interlock */
         smp_pre_interlocked_mb();
-        if (smp_native_bb(M, pa_h1, 0, TRUE))
-        {
+        if (smp_native_bb(M, pa_h1, 0, TRUE)) {
             iop.qxi_busy();
             smp_cpu_relax();
             return CC_C;
@@ -873,33 +853,31 @@ static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc)
 
         release = TRUE;
 
-        smp_interlocked_uint32* vpa_h1 = (smp_interlocked_uint32*) ((t_byte*) M + pa_h1);
+        smp_interlocked_uint32 *vpa_h1 = (smp_interlocked_uint32 *) ((t_byte *) M + pa_h1);
         a = ReadLP(RUN_PASS, pa_h1) & ~1;
 
         if (a & 06)                                         /* chk quad align */
             RSVD_OPND_FAULT;
 
-        if (a == 0)
-        {
+        if (a == 0) {
             /* queue was empty, perform insqhi */
             WriteLP(RUN_PASS, pa_h2, d - h);
             WriteLP(RUN_PASS, pa_d1, h - d);
             WriteLP(RUN_PASS, pa_d2, h - d);
 
             /* store forward link and release secondary interlock */
-            while (! smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (d - h)))  ;
+            while (!smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (d - h)));
             release = FALSE;
             smp_post_interlocked_mb();
 
             return CC_Z;
         }
-        else
-        {
+        else {
             c = ReadLP(RUN_PASS, pa_h2) + h;                /* address of previous tail */
             if (c & 07)
-                RSVD_OPND_FAULT;                                    
-            pa_c1 = TestMark (RUN_PASS, c, WA, NULL);
-            if (! ADDR_IS_MEM(pa_c1))
+                RSVD_OPND_FAULT;
+            pa_c1 = TestMark(RUN_PASS, c, WA, NULL);
+            if (!ADDR_IS_MEM(pa_c1))
                 RSVD_OPND_FAULT;
 
             WriteLP(RUN_PASS, pa_c1, d - c);
@@ -908,18 +886,16 @@ static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc)
             WriteLP(RUN_PASS, pa_h2, d - h);
 
             /* release secondary interlock */
-            while (! smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), a))  ;
+            while (!smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), a));
             release = FALSE;
             smp_post_interlocked_mb();
 
             return 0;
         }
     }
-    sim_catch_all
-    {
+    sim_catch_all {
         /* release secondary interlock and re-throw */
-        if (release)
-        {
+        if (release) {
             smp_native_bb(M, pa_h1, 0, FALSE);
             smp_post_interlocked_mb();
         }
@@ -930,8 +906,7 @@ static int32 op_insqti_native (RUN_DECL, int32 *opnd, int32 acc)
     sim_noreturn_int32;
 }
 
-static int32 op_insqti_portable (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_insqti_portable(RUN_DECL, int32 *opnd, int32 acc) {
     sim_try_volatile InterlockedOpLock iop(RUN_PASS, IOP_ILK);
 
     int32 h = opnd[1];
@@ -940,11 +915,11 @@ static int32 op_insqti_portable (RUN_DECL, int32 *opnd, int32 acc)
 
     if ((h == d) || ((h | d) & 07))                         /* h, d quad align? */
         RSVD_OPND_FAULT;
-    Read (RUN_PASS, d, L_BYTE, WA);                         /* wchk ent */
+    Read(RUN_PASS, d, L_BYTE, WA);                         /* wchk ent */
     iop.virt_lock(h, acc);
-    a = Read (RUN_PASS, h, L_LONG, WA);                     /* a <- (h), wchk */
+    a = Read(RUN_PASS, h, L_LONG, WA);                     /* a <- (h), wchk */
     if (a == 0)                                             /* if empty, ins hd */
-        return op_insqhi_portable_2 (RUN_PASS, opnd, acc, &iop);
+        return op_insqhi_portable_2(RUN_PASS, opnd, acc, &iop);
     if (a & 06)                                             /* chk quad align */
         RSVD_OPND_FAULT;
     if (a & 01)                                             /* busy, cc = 0001 */
@@ -953,19 +928,19 @@ static int32 op_insqti_portable (RUN_DECL, int32 *opnd, int32 acc)
         return CC_C;
     }
     iop.wmb = true;
-    Write (RUN_PASS, h, a | 1, L_LONG, WA);                 /* acquire interlock */
-    c = Read (RUN_PASS, h + 4, L_LONG, RA) + h;             /* c <- (h+4) + h */
+    Write(RUN_PASS, h, a | 1, L_LONG, WA);                 /* acquire interlock */
+    c = Read(RUN_PASS, h + 4, L_LONG, RA) + h;             /* c <- (h+4) + h */
     if (c & 07) {                                           /* c quad aligned? */
-        Write (RUN_PASS, h, a, L_LONG, WA);                 /* release interlock */
+        Write(RUN_PASS, h, a, L_LONG, WA);                 /* release interlock */
         RSVD_OPND_FAULT;                                    /* fault */
-        }
-    if (Test (RUN_PASS, c, WA, &t) < 0)                     /* wtst c, rls if err */
-        Write (RUN_PASS, h, a, L_LONG, WA);
-    Write (RUN_PASS, c, d - c, L_LONG, WA);                 /* (c) <- d-c, flt ok */
-    Write (RUN_PASS, d, h - d, L_LONG, WA);                 /* (d) <- h-d */
-    Write (RUN_PASS, d + 4, c - d, L_LONG, WA);             /* (d+4) <- c-d */
-    Write (RUN_PASS, h + 4, d - h, L_LONG, WA);             /* (h+4) <- d-h */
-    Write (RUN_PASS, h, a, L_LONG, WA);                     /* release interlock */
+    }
+    if (Test(RUN_PASS, c, WA, &t) < 0)                     /* wtst c, rls if err */
+        Write(RUN_PASS, h, a, L_LONG, WA);
+    Write(RUN_PASS, c, d - c, L_LONG, WA);                 /* (c) <- d-c, flt ok */
+    Write(RUN_PASS, d, h - d, L_LONG, WA);                 /* (d) <- h-d */
+    Write(RUN_PASS, d + 4, c - d, L_LONG, WA);             /* (d+4) <- c-d */
+    Write(RUN_PASS, h + 4, d - h, L_LONG, WA);             /* (h+4) <- d-h */
+    Write(RUN_PASS, h, a, L_LONG, WA);                     /* release interlock */
     return 0;                                               /* q >= 2 entries */
 }
 
@@ -995,16 +970,14 @@ static int32 op_insqti_portable (RUN_DECL, int32 *opnd, int32 acc)
         the header and the destination must not be equal.
 */
 
-int32 op_remqhi (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_remqhi(RUN_DECL, int32 *opnd, int32 acc) {
     if (use_native_interlocked)
         return op_remqhi_native(RUN_PASS, opnd, acc);
     else
         return op_remqhi_portable(RUN_PASS, opnd, acc);
 }
 
-static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_remqhi_native(RUN_DECL, int32 *opnd, int32 acc) {
     int32 h = opnd[0];
     int32 pa_h1;
     int32 ar, a, b = 0;                                     /* init b to suppress false GCC warning */
@@ -1013,28 +986,26 @@ static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc)
 
     if (h & 07)                                             /* h quad aligned? */
         RSVD_OPND_FAULT;
-    pa_h1 = TestMark (RUN_PASS, h, WA, NULL);
+    pa_h1 = TestMark(RUN_PASS, h, WA, NULL);
 
     /* must be in memory (not IO space) */
-    if (! (ADDR_IS_MEM(pa_h1)))
+    if (!(ADDR_IS_MEM(pa_h1)))
         RSVD_OPND_FAULT;
 
     if (opnd[1] < 0)                                        /* mem destination? */
     {
         if (h == opnd[2])                                   /* hdr = dst? */
             RSVD_OPND_FAULT;
-        Read (RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
+        Read(RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
     }
 
-    sim_try
-    {
+    sim_try {
         /* elevate thread priority if required */
         iop.prio_lock();
 
         /* acquire secondary interlock */
         smp_pre_interlocked_mb();
-        if (smp_native_bb(M, pa_h1, 0, TRUE))
-        {
+        if (smp_native_bb(M, pa_h1, 0, TRUE)) {
             iop.qxi_busy();
             smp_cpu_relax();
             return CC_C | CC_V;
@@ -1047,20 +1018,18 @@ static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc)
             RSVD_OPND_FAULT;
         a = ar + h;                                         /* abs addr of a */
 
-        if (ar)
-        {
-            b = Read (RUN_PASS, a, L_LONG, RA) + a;         /* b <- (a)+a, flt ok */
+        if (ar) {
+            b = Read(RUN_PASS, a, L_LONG, RA) + a;         /* b <- (a)+a, flt ok */
             if (b & 07)                                     /* b quad aligned? */
                 RSVD_OPND_FAULT;                            /* fault */
-            Write (RUN_PASS, b + 4, h - b, L_LONG, WA);     /* (b+4) <- h-b, flt ok */
+            Write(RUN_PASS, b + 4, h - b, L_LONG, WA);     /* (b+4) <- h-b, flt ok */
 
-            smp_interlocked_uint32* vpa_h1 = (smp_interlocked_uint32*) ((t_byte*) M + pa_h1);
-            while (! smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (b - h)))  ;
+            smp_interlocked_uint32 *vpa_h1 = (smp_interlocked_uint32 *) ((t_byte *) M + pa_h1);
+            while (!smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), (uint32) (b - h)));
             smp_post_interlocked_mb();
             release = FALSE;
         }
-        else
-        {
+        else {
             smp_native_bb(M, pa_h1, 0, FALSE);
             smp_post_interlocked_mb();
             release = FALSE;
@@ -1069,18 +1038,16 @@ static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc)
         if (opnd[1] >= 0)                                   /* store result */
             R[opnd[1]] = a;
         else
-            Write (RUN_PASS, opnd[2], a, L_LONG, WA);
+            Write(RUN_PASS, opnd[2], a, L_LONG, WA);
 
         if (ar == 0)                                        /* queue was empty */
             return CC_Z | CC_V;
 
         return (b == h) ? CC_Z : 0;                         /* if b = h, queue empty after removal */
     }
-    sim_catch_all
-    {
+    sim_catch_all {
         /* release secondary interlock and re-throw */
-        if (release)
-        {
+        if (release) {
             smp_native_bb(M, pa_h1, 0, FALSE);
             smp_post_interlocked_mb();
         }
@@ -1091,14 +1058,12 @@ static int32 op_remqhi_native (RUN_DECL, int32 *opnd, int32 acc)
     sim_noreturn_int32;
 }
 
-int32 op_remqhi_portable (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_remqhi_portable(RUN_DECL, int32 *opnd, int32 acc) {
     sim_try_volatile InterlockedOpLock iop(RUN_PASS, IOP_ILK);
-    return op_remqhi_portable_2 (RUN_PASS, opnd, acc, &iop);
+    return op_remqhi_portable_2(RUN_PASS, opnd, acc, &iop);
 }
 
-static int32 op_remqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock* iop)
-{
+static int32 op_remqhi_portable_2(RUN_DECL, int32 *opnd, int32 acc, sim_try_volatile InterlockedOpLock *iop) {
     int32 h = opnd[0];
     int32 ar, a, b = 0, t;                                  /* init b to suppress false GCC warning */
 
@@ -1108,10 +1073,10 @@ static int32 op_remqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_vol
     {
         if (h == opnd[2])                                   /* hdr = dst? */
             RSVD_OPND_FAULT;
-        Read (RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
+        Read(RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
     }
     iop->virt_lock(h, acc);
-    ar = Read (RUN_PASS, h, L_LONG, WA);                    /* ar <- (h) */
+    ar = Read(RUN_PASS, h, L_LONG, WA);                    /* ar <- (h) */
     if (ar & 06)                                            /* a quad aligned? */
         RSVD_OPND_FAULT;
     if (ar & 01)                                            /* busy, cc = 0011 */
@@ -1123,42 +1088,39 @@ static int32 op_remqhi_portable_2 (RUN_DECL, int32 *opnd, int32 acc, sim_try_vol
     if (ar)                                                 /* queue not empty? */
     {
         iop->wmb = true;
-        Write (RUN_PASS, h, ar | 1, L_LONG, WA);            /* acquire interlock */
-        if (Test (RUN_PASS, a, RA, &t) < 0)                 /* read tst a */
-             Write (RUN_PASS, h, ar, L_LONG, WA);           /* release if error */
-        b = Read (RUN_PASS, a, L_LONG, RA) + a;             /* b <- (a)+a, flt ok */
+        Write(RUN_PASS, h, ar | 1, L_LONG, WA);            /* acquire interlock */
+        if (Test(RUN_PASS, a, RA, &t) < 0)                 /* read tst a */
+            Write(RUN_PASS, h, ar, L_LONG, WA);           /* release if error */
+        b = Read(RUN_PASS, a, L_LONG, RA) + a;             /* b <- (a)+a, flt ok */
         if (b & 07) {                                       /* b quad aligned? */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
             RSVD_OPND_FAULT;                                /* fault */
-            }
+        }
         /* since b is quad-aligned, b+4 is guaranteed to be in the same page as b */
-        if (Test (RUN_PASS, b, WA, &t) < 0)                 /* write test b and b+4 */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release if err */
-        Write (RUN_PASS, b + 4, h - b, L_LONG, WA);         /* (b+4) <- h-b, flt ok */
-        Write (RUN_PASS, h, b - h, L_LONG, WA);             /* (h) <- b-h, rls int */
+        if (Test(RUN_PASS, b, WA, &t) < 0)                 /* write test b and b+4 */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release if err */
+        Write(RUN_PASS, b + 4, h - b, L_LONG, WA);         /* (b+4) <- h-b, flt ok */
+        Write(RUN_PASS, h, b - h, L_LONG, WA);             /* (h) <- b-h, rls int */
     }
     if (opnd[1] >= 0)                                       /* store result */
         R[opnd[1]] = a;
-    else
-    { 
+    else {
         iop->wmb = true;
-        Write (RUN_PASS, opnd[2], a, L_LONG, WA);
+        Write(RUN_PASS, opnd[2], a, L_LONG, WA);
     }
     if (ar == 0)                                            /* empty, cc = 0110 */
         return CC_Z | CC_V;
-    return (b == h)? CC_Z: 0;                               /* if b = h, q empty */
+    return (b == h) ? CC_Z : 0;                               /* if b = h, q empty */
 }
 
-int32 op_remqti (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_remqti(RUN_DECL, int32 *opnd, int32 acc) {
     if (use_native_interlocked)
         return op_remqti_native(RUN_PASS, opnd, acc);
     else
         return op_remqti_portable(RUN_PASS, opnd, acc);
 }
 
-static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc)
-{
+static int32 op_remqti_native(RUN_DECL, int32 *opnd, int32 acc) {
     int32 h = opnd[0];
     int32 ar, b, c, rcc;
     int32 pa_h1, pa_h2;
@@ -1172,30 +1134,28 @@ static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc)
      * get physical addresses; since "h" is quad-aligned, 
      * pa_h1 and pa_h2 are guaranteed to be in the same page
      */
-    pa_h1 = TestMark (RUN_PASS, h, WA, NULL);
+    pa_h1 = TestMark(RUN_PASS, h, WA, NULL);
     pa_h2 = pa_h1 + 4;
 
     /* must be in memory (not IO space); 
        test for pa_h1 also covers pa_h2 too */
-    if (! (ADDR_IS_MEM(pa_h1)))
+    if (!(ADDR_IS_MEM(pa_h1)))
         RSVD_OPND_FAULT;
 
     if (opnd[1] < 0)                                        /* mem destination? */
     {
         if (h == opnd[2])                                   /* hdr = dst? */
             RSVD_OPND_FAULT;
-        Read (RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
+        Read(RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
     }
 
-    sim_try
-    {
+    sim_try {
         /* elevate thread priority if required */
         iop.prio_lock();
 
         /* acquire secondary interlock */
         smp_pre_interlocked_mb();
-        if (smp_native_bb(M, pa_h1, 0, TRUE))
-        {
+        if (smp_native_bb(M, pa_h1, 0, TRUE)) {
             iop.qxi_busy();
             smp_cpu_relax();
             return CC_C | CC_V;
@@ -1209,35 +1169,33 @@ static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc)
 
         if (ar)                                             /* queue not empty */
         {
-            c = ReadLP (RUN_PASS, pa_h2);                   /* c <- (h+4) */
+            c = ReadLP(RUN_PASS, pa_h2);                   /* c <- (h+4) */
             if (ar == c)                                    /* single entry ? */
             {
                 c = ar + h;                                     /* result: abs addr of removed entry */
                 WriteLP(RUN_PASS, pa_h2, 0);                    /* clear header, release interlock */
-                smp_interlocked_uint32* vpa_h1 = (smp_interlocked_uint32*) ((t_byte*) M + pa_h1);
-                while (! smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), 0))  ;
+                smp_interlocked_uint32 *vpa_h1 = (smp_interlocked_uint32 *) ((t_byte *) M + pa_h1);
+                while (!smp_interlocked_cas_done(vpa_h1, weak_read(*vpa_h1), 0));
                 smp_post_interlocked_mb();
                 release = FALSE;
                 rcc = CC_Z;                                     /* result code: queue is empty after removal */
             }
-            else
-            {
+            else {
                 if (c & 07)                                     /* c quad aligned? */
                     RSVD_OPND_FAULT;                            /* fault */
                 c = c + h;                                      /* abs addr of c */
-                b = Read (RUN_PASS, c + 4, L_LONG, RA) + c;     /* b <- (c+4)+c */
+                b = Read(RUN_PASS, c + 4, L_LONG, RA) + c;     /* b <- (c+4)+c */
                 if (b & 07)                                     /* b quad aligned? */
                     RSVD_OPND_FAULT;                            /* fault */
-                Write (RUN_PASS, b, h - b, L_LONG, WA);         /* (b) <- h-b */
-                WriteLP (RUN_PASS, pa_h2, b - h);               /* (h+4) <- b-h */
+                Write(RUN_PASS, b, h - b, L_LONG, WA);         /* (b) <- h-b */
+                WriteLP(RUN_PASS, pa_h2, b - h);               /* (h+4) <- b-h */
                 smp_native_bb(M, pa_h1, 0, FALSE);              /* release interlock */
                 smp_post_interlocked_mb();
                 release = FALSE;
                 rcc = 0;                                        /* result code: queue not empty after removal */
             }
         }
-        else
-        {
+        else {
             smp_native_bb(M, pa_h1, 0, FALSE);              /* release interlock */
             smp_post_interlocked_mb();
             release = FALSE;
@@ -1248,15 +1206,13 @@ static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc)
         if (opnd[1] >= 0)                                   /* store result */
             R[opnd[1]] = c;
         else
-            Write (RUN_PASS, opnd[2], c, L_LONG, WA);
+            Write(RUN_PASS, opnd[2], c, L_LONG, WA);
 
         return rcc;
     }
-    sim_catch_all
-    {
+    sim_catch_all {
         /* release secondary interlock and re-throw */
-        if (release)
-        {
+        if (release) {
             smp_native_bb(M, pa_h1, 0, FALSE);
             smp_post_interlocked_mb();
         }
@@ -1267,8 +1223,7 @@ static int32 op_remqti_native (RUN_DECL, int32 *opnd, int32 acc)
     sim_noreturn_int32;
 }
 
-int32 op_remqti_portable (RUN_DECL, int32 *opnd, int32 acc)
-{
+int32 op_remqti_portable(RUN_DECL, int32 *opnd, int32 acc) {
     sim_try_volatile InterlockedOpLock iop(RUN_PASS, IOP_ILK);
 
     int32 h = opnd[0];
@@ -1279,10 +1234,10 @@ int32 op_remqti_portable (RUN_DECL, int32 *opnd, int32 acc)
     if (opnd[1] < 0) {                                      /* mem destination? */
         if (h == opnd[2])                                   /* hdr = dst? */
             RSVD_OPND_FAULT;
-        Read (RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
-        }
+        Read(RUN_PASS, opnd[2], L_LONG, WA);               /* wchk dst */
+    }
     iop.virt_lock(h, acc);
-    ar = Read (RUN_PASS, h, L_LONG, WA);                    /* a <- (h) */
+    ar = Read(RUN_PASS, h, L_LONG, WA);                    /* a <- (h) */
     if (ar & 06)                                            /* a quad aligned? */
         RSVD_OPND_FAULT;
     if (ar & 01)                                            /* busy, cc = 0011 */
@@ -1293,38 +1248,37 @@ int32 op_remqti_portable (RUN_DECL, int32 *opnd, int32 acc)
     if (ar)                                                 /* queue not empty */
     {
         iop.wmb = true;
-        Write (RUN_PASS, h, ar | 1, L_LONG, WA);            /* acquire interlock */
-        c = Read (RUN_PASS, h + 4, L_LONG, RA);             /* c <- (h+4) */
+        Write(RUN_PASS, h, ar | 1, L_LONG, WA);            /* acquire interlock */
+        c = Read(RUN_PASS, h + 4, L_LONG, RA);             /* c <- (h+4) */
         if (ar == c) {                                      /* single entry? */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
-            return op_remqhi_portable_2 (RUN_PASS, opnd, acc, &iop);       /* treat as remqhi */
-            }
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
+            return op_remqhi_portable_2(RUN_PASS, opnd, acc, &iop);       /* treat as remqhi */
+        }
         if (c & 07) {                                       /* c quad aligned? */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
             RSVD_OPND_FAULT;                                /* fault */
-            }
+        }
         c = c + h;                                          /* abs addr of c */
-        if (Test (RUN_PASS, c + 4, RA, &t) < 0)             /* read test c+4 */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release if error */
-        b = Read (RUN_PASS, c + 4, L_LONG, RA) + c;         /* b <- (c+4)+c, flt ok */
+        if (Test(RUN_PASS, c + 4, RA, &t) < 0)             /* read test c+4 */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release if error */
+        b = Read(RUN_PASS, c + 4, L_LONG, RA) + c;         /* b <- (c+4)+c, flt ok */
         if (b & 07) {                                       /* b quad aligned? */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release interlock */
             RSVD_OPND_FAULT;                                /* fault */
-            }
-        if (Test (RUN_PASS, b, WA, &t) < 0)                 /* write test b */
-            Write (RUN_PASS, h, ar, L_LONG, WA);            /* release if error */
-        Write (RUN_PASS, b, h - b, L_LONG, WA);             /* (b) <- h-b */
-        Write (RUN_PASS, h + 4, b - h, L_LONG, WA);         /* (h+4) <- b-h */
-        Write (RUN_PASS, h, ar, L_LONG, WA);                /* release interlock */
+        }
+        if (Test(RUN_PASS, b, WA, &t) < 0)                 /* write test b */
+            Write(RUN_PASS, h, ar, L_LONG, WA);            /* release if error */
+        Write(RUN_PASS, b, h - b, L_LONG, WA);             /* (b) <- h-b */
+        Write(RUN_PASS, h + 4, b - h, L_LONG, WA);         /* (h+4) <- b-h */
+        Write(RUN_PASS, h, ar, L_LONG, WA);                /* release interlock */
     }
     else
         c = h;                                              /* empty, result = h */
     if (opnd[1] >= 0)                                       /* store result */
         R[opnd[1]] = c;
-    else
-    {
+    else {
         iop.wmb = true;
-        Write (RUN_PASS, opnd[2], c, L_LONG, WA);
+        Write(RUN_PASS, opnd[2], c, L_LONG, WA);
     }
     if (ar == 0)                                            /* empty, cc = 0110 */
         return CC_Z | CC_V;
@@ -1363,46 +1317,45 @@ int32 op_remqti_portable (RUN_DECL, int32 *opnd, int32 acc)
         R5      =       cc/state
 */
 
-int32 op_movc (RUN_DECL, int32 *opnd, int32 movc5, int32 acc)
-{
-int32 i, cc, fill, wd;
-int32 j, lnt, mlnt[3];
-static const int32 looplnt[3] = { L_BYTE, L_LONG, L_BYTE };
+int32 op_movc(RUN_DECL, int32 *opnd, int32 movc5, int32 acc) {
+    int32 i, cc, fill, wd;
+    int32 j, lnt, mlnt[3];
+    static const int32 looplnt[3] = {L_BYTE, L_LONG, L_BYTE};
 
-if (PSL & PSL_FPD) {                                    /* FPD set? */
-    SETPC (fault_PC + STR_GETDPC (R[0]));               /* reset PC */
-    fill = STR_GETCHR (R[0]);                           /* get fill */
-    R[2] = R[2] & STR_LNMASK;                           /* mask lengths */
-    if (R[4] > 0)
-        R[4] = R[4] & STR_LNMASK;
+    if (PSL & PSL_FPD) {                                    /* FPD set? */
+        SETPC (fault_PC + STR_GETDPC(R[0]));               /* reset PC */
+        fill = STR_GETCHR (R[0]);                           /* get fill */
+        R[2] = R[2] & STR_LNMASK;                           /* mask lengths */
+        if (R[4] > 0)
+            R[4] = R[4] & STR_LNMASK;
     }
-else {
-    R[1] = opnd[1];                                     /* src addr */
-    if (movc5) {                                        /* MOVC5? */
-        R[2] = (opnd[0] < opnd[3])? opnd[0]: opnd[3];
-        R[3] = opnd[4];                                 /* dst addr */
-        R[4] = opnd[3] - opnd[0];                       /* dstlen - srclen */
-        fill = opnd[2];                                 /* set fill */
-        CC_CMP_W (opnd[0], opnd[3]);                    /* set cc's */
-        }
     else {
-        R[2] = opnd[0];                                 /* mvlen = srclen */
-        R[3] = opnd[2];                                 /* dst addr */
-        R[4] = fill = 0;                                /* no fill */
-        cc = CC_Z;                                      /* set cc's */
+        R[1] = opnd[1];                                     /* src addr */
+        if (movc5) {                                        /* MOVC5? */
+            R[2] = (opnd[0] < opnd[3]) ? opnd[0] : opnd[3];
+            R[3] = opnd[4];                                 /* dst addr */
+            R[4] = opnd[3] - opnd[0];                       /* dstlen - srclen */
+            fill = opnd[2];                                 /* set fill */
+            CC_CMP_W (opnd[0], opnd[3]);                    /* set cc's */
         }
-    R[0] = STR_PACK (fill, R[2]);                       /* initial mvlen */
-    if (R[2]) {                                         /* any move? */
-        if (((uint32) R[1]) < ((uint32) R[3])) {
-            R[1] = R[1] + R[2];                         /* backward, adjust */
-            R[3] = R[3] + R[2];                         /* addr to end */
-            R[5] = MVC_BACK;                            /* set state */
+        else {
+            R[2] = opnd[0];                                 /* mvlen = srclen */
+            R[3] = opnd[2];                                 /* dst addr */
+            R[4] = fill = 0;                                /* no fill */
+            cc = CC_Z;                                      /* set cc's */
+        }
+        R[0] = STR_PACK (fill, R[2]);                       /* initial mvlen */
+        if (R[2]) {                                         /* any move? */
+            if (((uint32) R[1]) < ((uint32) R[3])) {
+                R[1] = R[1] + R[2];                         /* backward, adjust */
+                R[3] = R[3] + R[2];                         /* addr to end */
+                R[5] = MVC_BACK;                            /* set state */
             }
-        else R[5] = MVC_FRWD;                           /* fwd, set state */
+            else R[5] = MVC_FRWD;                           /* fwd, set state */
         }
-    else R[5] = MVC_FILL;                               /* fill, set state */
-    R[5] = R[5] | (cc << MVC_V_CC);                     /* pack with state */
-    PSL = PSL | PSL_FPD;                                /* set FPD */
+        else R[5] = MVC_FILL;                               /* fill, set state */
+        R[5] = R[5] | (cc << MVC_V_CC);                     /* pack with state */
+        PSL = PSL | PSL_FPD;                                /* set FPD */
     }
 
 /* At this point,
@@ -1415,77 +1368,77 @@ else {
         R5      =       cc'state
 */
 
-switch (R[5] & MVC_M_STATE) {                           /* case on state */
+    switch (R[5] & MVC_M_STATE) {                           /* case on state */
 
-    case MVC_FRWD:                                      /* move forward */
-        mlnt[0] = (4 - R[3]) & 3;                       /* length to align */
-        if (mlnt[0] > R[2])                             /* cant exceed total */
-            mlnt[0] = R[2];
-        mlnt[1] = (R[2] - mlnt[0]) & ~03;               /* aligned length */
-        mlnt[2] = R[2] - mlnt[0] - mlnt[1];             /* tail */
-        for (i = 0; i < 3; i++) {                       /* head, align, tail */
-            lnt = looplnt[i];                           /* length for loop */
-            for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
-                wd = Read (RUN_PASS, R[1], lnt, RA);    /* read src */
-                Write (RUN_PASS, R[3], wd, lnt, WA);    /* write dst */
-                R[1] = R[1] + lnt;                      /* inc src addr */
-                R[3] = R[3] + lnt;                      /* inc dst addr */
-                R[2] = R[2] - lnt;                      /* dec move lnt */
+        case MVC_FRWD:                                      /* move forward */
+            mlnt[0] = (4 - R[3]) & 3;                       /* length to align */
+            if (mlnt[0] > R[2])                             /* cant exceed total */
+                mlnt[0] = R[2];
+            mlnt[1] = (R[2] - mlnt[0]) & ~03;               /* aligned length */
+            mlnt[2] = R[2] - mlnt[0] - mlnt[1];             /* tail */
+            for (i = 0; i < 3; i++) {                       /* head, align, tail */
+                lnt = looplnt[i];                           /* length for loop */
+                for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
+                    wd = Read(RUN_PASS, R[1], lnt, RA);    /* read src */
+                    Write(RUN_PASS, R[3], wd, lnt, WA);    /* write dst */
+                    R[1] = R[1] + lnt;                      /* inc src addr */
+                    R[3] = R[3] + lnt;                      /* inc dst addr */
+                    R[2] = R[2] - lnt;                      /* dec move lnt */
                 }
             }
-        goto FILL;                                      /* check for fill */
+            goto FILL;                                      /* check for fill */
 
-    case MVC_BACK:                                      /* move backward */
-        mlnt[0] = R[3] & 03;                            /* length to align */
-        if (mlnt[0] > R[2])                             /* cant exceed total */
-            mlnt[0] = R[2];
-        mlnt[1] = (R[2] - mlnt[0]) & ~03;               /* aligned length */
-        mlnt[2] = R[2] - mlnt[0] - mlnt[1];             /* tail */
-        for (i = 0; i < 3; i++) {                       /* head, align, tail */
-            lnt = looplnt[i];                           /* length for loop */
-            for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
-                wd = Read (RUN_PASS, R[1] - lnt, lnt, RA);        /* read src */
-                Write (RUN_PASS, R[3] - lnt, wd, lnt, WA);        /* write dst */
-                R[1] = R[1] - lnt;                      /* dec src addr */
-                R[3] = R[3] - lnt;                      /* dec dst addr */
-                R[2] = R[2] - lnt;                      /* dec move lnt */
+        case MVC_BACK:                                      /* move backward */
+            mlnt[0] = R[3] & 03;                            /* length to align */
+            if (mlnt[0] > R[2])                             /* cant exceed total */
+                mlnt[0] = R[2];
+            mlnt[1] = (R[2] - mlnt[0]) & ~03;               /* aligned length */
+            mlnt[2] = R[2] - mlnt[0] - mlnt[1];             /* tail */
+            for (i = 0; i < 3; i++) {                       /* head, align, tail */
+                lnt = looplnt[i];                           /* length for loop */
+                for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
+                    wd = Read(RUN_PASS, R[1] - lnt, lnt, RA);        /* read src */
+                    Write(RUN_PASS, R[3] - lnt, wd, lnt, WA);        /* write dst */
+                    R[1] = R[1] - lnt;                      /* dec src addr */
+                    R[3] = R[3] - lnt;                      /* dec dst addr */
+                    R[2] = R[2] - lnt;                      /* dec move lnt */
                 }
             }
-        R[1] = R[1] + (R[0] & STR_LNMASK);              /* final src addr */
-        R[3] = R[3] + (R[0] & STR_LNMASK);              /* final dst addr */
+            R[1] = R[1] + (R[0] & STR_LNMASK);              /* final src addr */
+            R[3] = R[3] + (R[0] & STR_LNMASK);              /* final dst addr */
 
-    case MVC_FILL:                                      /* fill */
-    FILL:
-        if (R[4] <= 0)                                  /* any fill? */
+        case MVC_FILL:                                      /* fill */
+        FILL:
+            if (R[4] <= 0)                                  /* any fill? */
+                break;
+            R[5] = R[5] | MVC_FILL;                         /* set state */
+            mlnt[0] = (4 - R[3]) & 3;                       /* length to align */
+            if (mlnt[0] > R[4])                             /* cant exceed total */
+                mlnt[0] = R[4];
+            mlnt[1] = (R[4] - mlnt[0]) & ~03;               /* aligned length */
+            mlnt[2] = R[4] - mlnt[0] - mlnt[1];             /* tail */
+            for (i = 0; i < 3; i++) {                       /* head, align, tail */
+                lnt = looplnt[i];                           /* length for loop */
+                fill = fill & BMASK;                        /* fill for loop */
+                if (lnt == L_LONG)
+                    fill = (((uint32) fill) << 24) | (fill << 16) | (fill << 8) | fill;
+                for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
+                    Write(RUN_PASS, R[3], fill, lnt, WA);            /* write fill */
+                    R[3] = R[3] + lnt;                      /* inc dst addr */
+                    R[4] = R[4] - lnt;                      /* dec fill lnt */
+                }
+            }
             break;
-        R[5] = R[5] | MVC_FILL;                         /* set state */
-        mlnt[0] = (4 - R[3]) & 3;                       /* length to align */
-        if (mlnt[0] > R[4])                             /* cant exceed total */
-            mlnt[0] = R[4];
-        mlnt[1] = (R[4] - mlnt[0]) & ~03;               /* aligned length */
-        mlnt[2] = R[4] - mlnt[0] - mlnt[1];             /* tail */
-        for (i = 0; i < 3; i++) {                       /* head, align, tail */
-            lnt = looplnt[i];                           /* length for loop */
-            fill = fill & BMASK;                        /* fill for loop */
-            if (lnt == L_LONG)
-                fill = (((uint32) fill) << 24) | (fill << 16) | (fill << 8) | fill;
-            for (j = 0; j < mlnt[i]; j = j + lnt, cpu_cycle()) {
-                Write (RUN_PASS, R[3], fill, lnt, WA);            /* write fill */
-                R[3] = R[3] + lnt;                      /* inc dst addr */
-                R[4] = R[4] - lnt;                      /* dec fill lnt */
-                }
-            }
-        break;
 
-    default:                                            /* bad state */
-        RSVD_OPND_FAULT;                                /* you lose */
-        }
+        default:                                            /* bad state */
+            RSVD_OPND_FAULT;                                /* you lose */
+    }
 
-PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
-cc = (R[5] >> MVC_V_CC) & CC_MASK;                      /* get cc's */
-R[0] = NEG (R[4]);                                      /* set R0 */
-R[2] = R[4] = R[5] = 0;                                 /* clear reg */
-return cc;
+    PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
+    cc = (R[5] >> MVC_V_CC) & CC_MASK;                      /* get cc's */
+    R[0] = NEG (R[4]);                                      /* set R0 */
+    R[2] = R[4] = R[5] = 0;                                 /* clear reg */
+    return cc;
 }
 
 /* CMPC3, CMPC5
@@ -1509,52 +1462,51 @@ return cc;
         R3      =       source2 address
 */
 
-int32 op_cmpc (RUN_DECL, int32 *opnd, int32 cmpc5, int32 acc)
-{
-int32 cc, s1, s2, fill;
+int32 op_cmpc(RUN_DECL, int32 *opnd, int32 cmpc5, int32 acc) {
+    int32 cc, s1, s2, fill;
 
-if (PSL & PSL_FPD) {                                    /* FPD set? */
-    SETPC (fault_PC + STR_GETDPC (R[0]));               /* reset PC */
-    fill = STR_GETCHR (R[0]);                           /* get fill */
+    if (PSL & PSL_FPD) {                                    /* FPD set? */
+        SETPC (fault_PC + STR_GETDPC(R[0]));               /* reset PC */
+        fill = STR_GETCHR (R[0]);                           /* get fill */
     }
-else {
-    R[1] = opnd[1];                                     /* src1len */
-    if (cmpc5) {                                        /* CMPC5? */
-        R[2] = opnd[3];                                 /* get src2 opnds */
-        R[3] = opnd[4];
-        fill = opnd[2];
-        }
     else {
-        R[2] = opnd[0];                                 /* src2len = src1len */
-        R[3] = opnd[2];
-        fill = 0;
+        R[1] = opnd[1];                                     /* src1len */
+        if (cmpc5) {                                        /* CMPC5? */
+            R[2] = opnd[3];                                 /* get src2 opnds */
+            R[3] = opnd[4];
+            fill = opnd[2];
         }
-    R[0] = STR_PACK (fill, opnd[0]);                    /* src1len + FPD data */
-    PSL = PSL | PSL_FPD;
+        else {
+            R[2] = opnd[0];                                 /* src2len = src1len */
+            R[3] = opnd[2];
+            fill = 0;
+        }
+        R[0] = STR_PACK (fill, opnd[0]);                    /* src1len + FPD data */
+        PSL = PSL | PSL_FPD;
     }
-R[2] = R[2] & STR_LNMASK;                               /* mask src2len */
-for (s1 = s2 = 0; ((R[0] | R[2]) & STR_LNMASK) != 0;  cpu_cycle()) {
-    if (R[0] & STR_LNMASK)                              /* src1? read */
-        s1 = Read (RUN_PASS, R[1], L_BYTE, RA);
-    else s1 = fill;                                     /* no, use fill */
-    if (R[2])                                           /* src2? read */
-        s2 = Read (RUN_PASS, R[3], L_BYTE, RA);
-    else s2 = fill;                                     /* no, use fill */
-    if (s1 != s2)                                       /* src1 = src2? */
-        break;
-    if (R[0] & STR_LNMASK) {                            /* if src1, decr */
-        R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
-        R[1] = R[1] + 1;
+    R[2] = R[2] & STR_LNMASK;                               /* mask src2len */
+    for (s1 = s2 = 0; ((R[0] | R[2]) & STR_LNMASK) != 0; cpu_cycle()) {
+        if (R[0] & STR_LNMASK)                              /* src1? read */
+            s1 = Read(RUN_PASS, R[1], L_BYTE, RA);
+        else s1 = fill;                                     /* no, use fill */
+        if (R[2])                                           /* src2? read */
+            s2 = Read(RUN_PASS, R[3], L_BYTE, RA);
+        else s2 = fill;                                     /* no, use fill */
+        if (s1 != s2)                                       /* src1 = src2? */
+            break;
+        if (R[0] & STR_LNMASK) {                            /* if src1, decr */
+            R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
+            R[1] = R[1] + 1;
         }
-    if (R[2]) {                                         /* if src2, decr */
-        R[2] = (R[2] - 1) & STR_LNMASK;
-        R[3] = R[3] + 1;
+        if (R[2]) {                                         /* if src2, decr */
+            R[2] = (R[2] - 1) & STR_LNMASK;
+            R[3] = R[3] + 1;
         }
     }
-PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
-CC_CMP_B (s1, s2);                                      /* set cc's */
-R[0] = R[0] & STR_LNMASK;                               /* clear packup */
-return cc;
+    PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
+    CC_CMP_B (s1, s2);                                      /* set cc's */
+    R[0] = R[0] & STR_LNMASK;                               /* clear packup */
+    return cc;
 }
 
 /* LOCC, SKPC
@@ -1569,30 +1521,29 @@ return cc;
         R1      =       source address
 */
 
-int32 op_locskp (RUN_DECL, int32 *opnd, int32 skpc, int32 acc)
-{
-int32 c, match;
+int32 op_locskp(RUN_DECL, int32 *opnd, int32 skpc, int32 acc) {
+    int32 c, match;
 
-if (PSL & PSL_FPD) {                                    /* FPD set? */
-    SETPC (fault_PC + STR_GETDPC (R[0]));               /* reset PC */
-    match = STR_GETCHR (R[0]);                          /* get match char */
+    if (PSL & PSL_FPD) {                                    /* FPD set? */
+        SETPC (fault_PC + STR_GETDPC(R[0]));               /* reset PC */
+        match = STR_GETCHR (R[0]);                          /* get match char */
     }
-else {
-    match = opnd[0];                                    /* get operands */
-    R[0] = STR_PACK (match, opnd[1]);                   /* src len + FPD data */
-    R[1] = opnd[2];                                     /* src addr */
-    PSL = PSL | PSL_FPD;
+    else {
+        match = opnd[0];                                    /* get operands */
+        R[0] = STR_PACK (match, opnd[1]);                   /* src len + FPD data */
+        R[1] = opnd[2];                                     /* src addr */
+        PSL = PSL | PSL_FPD;
     }
-for ( ; (R[0] & STR_LNMASK) != 0;  cpu_cycle() ) {      /* loop thru string */
-    c = Read (RUN_PASS, R[1], L_BYTE, RA);              /* get src byte */
-    if ((c == match) ^ skpc)                            /* match & locc? */
-        break;
-    R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
-    R[1] = R[1] + 1;                                    /* incr src1adr */
+    for (; (R[0] & STR_LNMASK) != 0; cpu_cycle()) {      /* loop thru string */
+        c = Read(RUN_PASS, R[1], L_BYTE, RA);              /* get src byte */
+        if ((c == match) ^ skpc)                            /* match & locc? */
+            break;
+        R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
+        R[1] = R[1] + 1;                                    /* incr src1adr */
     }
-PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
-R[0] = R[0] & STR_LNMASK;                               /* clear packup */
-return (R[0]? 0: CC_Z);                                 /* set cc's */
+    PSL = PSL & ~PSL_FPD;                                   /* clear FPD */
+    R[0] = R[0] & STR_LNMASK;                               /* clear packup */
+    return (R[0] ? 0 : CC_Z);                                 /* set cc's */
 }
 
 /* SCANC, SPANC
@@ -1609,33 +1560,32 @@ return (R[0]? 0: CC_Z);                                 /* set cc's */
         R3      =       table address
 */
 
-int32 op_scnspn (RUN_DECL, int32 *opnd, int32 spanc, int32 acc)
-{
-int32 c, t, mask;
+int32 op_scnspn(RUN_DECL, int32 *opnd, int32 spanc, int32 acc) {
+    int32 c, t, mask;
 
-if (PSL & PSL_FPD) {                                    /* FPD set? */
-    SETPC (fault_PC + STR_GETDPC (R[0]));               /* reset PC */
-    mask = STR_GETCHR (R[0]);                           /* get mask */
+    if (PSL & PSL_FPD) {                                    /* FPD set? */
+        SETPC (fault_PC + STR_GETDPC(R[0]));               /* reset PC */
+        mask = STR_GETCHR (R[0]);                           /* get mask */
     }
-else {
-    R[1] = opnd[1];                                     /* src addr */
-    R[3] = opnd[2];                                     /* tblad */
-    mask = opnd[3];                                     /* mask */
-    R[0] = STR_PACK (mask, opnd[0]);                    /* srclen + FPD data */
-    PSL = PSL | PSL_FPD;
+    else {
+        R[1] = opnd[1];                                     /* src addr */
+        R[3] = opnd[2];                                     /* tblad */
+        mask = opnd[3];                                     /* mask */
+        R[0] = STR_PACK (mask, opnd[0]);                    /* srclen + FPD data */
+        PSL = PSL | PSL_FPD;
     }
-for ( ; (R[0] & STR_LNMASK) != 0;  cpu_cycle() ) {      /* loop thru string */
-    c = Read (RUN_PASS, R[1], L_BYTE, RA);              /* get byte */
-    t = Read (RUN_PASS, R[3] + c, L_BYTE, RA);          /* get table ent */
-    if (((t & mask) != 0) ^ spanc)                      /* test vs instr */
-        break;
-    R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
-    R[1] = R[1] + 1;
+    for (; (R[0] & STR_LNMASK) != 0; cpu_cycle()) {      /* loop thru string */
+        c = Read(RUN_PASS, R[1], L_BYTE, RA);              /* get byte */
+        t = Read(RUN_PASS, R[3] + c, L_BYTE, RA);          /* get table ent */
+        if (((t & mask) != 0) ^ spanc)                      /* test vs instr */
+            break;
+        R[0] = (R[0] & ~STR_LNMASK) | ((R[0] - 1) & STR_LNMASK);
+        R[1] = R[1] + 1;
     }
-PSL = PSL & ~PSL_FPD;
-R[0] = R[0] & STR_LNMASK;                               /* clear packup */
-R[2] = 0;
-return (R[0]? 0: CC_Z);
+    PSL = PSL & ~PSL_FPD;
+    R[0] = R[0] & STR_LNMASK;                               /* clear packup */
+    R[2] = 0;
+    return (R[0] ? 0 : CC_Z);
 }
 
 /* Operating system interfaces */
@@ -1650,11 +1600,11 @@ return (R[0]? 0: CC_Z);
                         1:  interrupt
 */
 
-t_stat cpu_set_hist (UNIT *uptr, int32 val, char *cptr, void *desc);
-t_stat cpu_show_hist (SMP_FILE *st, UNIT *uptr, int32 val, void *desc);
+t_stat cpu_set_hist(UNIT *uptr, int32 val, char *cptr, void *desc);
 
-int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
-{
+t_stat cpu_show_hist(SMP_FILE *st, UNIT *uptr, int32 val, void *desc);
+
+int32 intexc(RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei) {
     int32 oldpsl = PSL | cc;
     int32 oldcur = PSL_GETCUR (oldpsl);
     int32 oldsp = SP;
@@ -1680,7 +1630,7 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
     in_ie = 1;                                                /* flag int/exc */
     CLR_TRAPS;                                                /* clear traps */
 
-    newpc = ReadLP (RUN_PASS, (SCBB + vec) & (PAMASK & ~3));  /* read new PC */
+    newpc = ReadLP(RUN_PASS, (SCBB + vec) & (PAMASK & ~3));  /* read new PC */
     if (newpc & 2)                                            /* bad flags? */
         ABORT (STOP_ILLVEC);
     if (ei == IE_SVE)                                         /* severe? on istk */
@@ -1690,16 +1640,14 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
     {
         newpsl = PSL_IS;
     }
-    else
-    {
+    else {
         STK[oldcur] = SP;                                     /* no, save cur stk */
         if (newpc & 1)                                        /* to int stk? */
         {
             newpsl = PSL_IS;                                  /* flag */
             SP = IS;                                          /* new stack */
         }
-        else
-        {
+        else {
             newpsl = 0;                                       /* to ker stk */
             SP = KSP;                                         /* new stack */
         }
@@ -1714,12 +1662,10 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
     }
     else                                                      /* exception or severe exception */
     {
-        if (newpc & 1)
-        {
+        if (newpc & 1) {
             newpsl |= PSL_IPL1F;
         }
-        else
-        {
+        else {
             newpsl |= oldpsl & PSL_IPL;
         }
         newpsl |= oldcur << PSL_V_PRV;
@@ -1728,8 +1674,8 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
     PSL = newpsl;
 
     if (DEBUG_PRI (cpu_dev, LOG_CPU_I))
-        fprintf (sim_deb, ">>IEX: PC=%08x, PSL=%08x, SP=%08x, VEC=%08x, nPSL=%08x, nSP=%08x\n",
-                 PC, oldpsl, oldsp, vec, PSL, SP);
+        fprintf(sim_deb, ">>IEX: PC=%08x, PSL=%08x, SP=%08x, VEC=%08x, nPSL=%08x, nSP=%08x\n",
+                PC, oldpsl, oldsp, vec, PSL, SP);
 
     /*
      * O/S virtualization assistance.
@@ -1743,8 +1689,8 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
         cpu_on_changed_ipl(RUN_PASS, oldpsl, 0);
 
     acc = ACC_MASK (KERN);                                    /* new mode is kernel */
-    Write (RUN_PASS, SP - 4, oldpsl, L_LONG, WA);             /* push old PSL */
-    Write (RUN_PASS, SP - 8, PC, L_LONG, WA);                 /* push old PC */
+    Write(RUN_PASS, SP - 4, oldpsl, L_LONG, WA);             /* push old PSL */
+    Write(RUN_PASS, SP - 8, PC, L_LONG, WA);                 /* push old PC */
     SP = SP - 8;                                              /* update stk ptr */
     JUMP (newpc & ~3);                                        /* change PC */
     in_ie = 0;                                                /* out of flows */
@@ -1756,37 +1702,36 @@ int32 intexc (RUN_DECL, int32 vec, int32 cc, int32 ipl, int ei)
         opnd[0] =       operand
 */
 
-int32 op_chm (RUN_DECL, int32 *opnd, int32 cc, int32 opc)
-{
-int32 mode = opc & PSL_M_MODE;
-int32 cur = PSL_GETCUR (PSL);
-int32 tsp, newpc, acc, sta;
+int32 op_chm(RUN_DECL, int32 *opnd, int32 cc, int32 opc) {
+    int32 mode = opc & PSL_M_MODE;
+    int32 cur = PSL_GETCUR (PSL);
+    int32 tsp, newpc, acc, sta;
 
-if (PSL & PSL_IS)
-    ABORT (STOP_CHMFI);
-newpc = ReadLP (RUN_PASS, (SCBB + SCB_CHMK + (mode << 2)) & PAMASK);
-if (cur < mode)                                         /* only inward */
-    mode = cur;
-STK[cur] = SP;                                          /* save stack */
-tsp = STK[mode];                                        /* get new stk */
-acc = ACC_MASK (mode);                                  /* set new mode */
-if (Test (RUN_PASS, fault_p2 = tsp - 1, WA, &sta) < 0) {      /* probe stk */
-    fault_p1 = MM_WRITE | (sta & MM_EMASK);
-    ABORT ((sta & 4)? ABORT_TNV: ABORT_ACV);
+    if (PSL & PSL_IS)
+        ABORT (STOP_CHMFI);
+    newpc = ReadLP(RUN_PASS, (SCBB + SCB_CHMK + (mode << 2)) & PAMASK);
+    if (cur < mode)                                         /* only inward */
+        mode = cur;
+    STK[cur] = SP;                                          /* save stack */
+    tsp = STK[mode];                                        /* get new stk */
+    acc = ACC_MASK (mode);                                  /* set new mode */
+    if (Test(RUN_PASS, fault_p2 = tsp - 1, WA, &sta) < 0) {      /* probe stk */
+        fault_p1 = MM_WRITE | (sta & MM_EMASK);
+        ABORT ((sta & 4) ? ABORT_TNV : ABORT_ACV);
     }
-if (Test (RUN_PASS, fault_p2 = tsp - 12, WA, &sta) < 0) {
-    fault_p1 = MM_WRITE | (sta & MM_EMASK);
-    ABORT ((sta & 4)? ABORT_TNV: ABORT_ACV);
+    if (Test(RUN_PASS, fault_p2 = tsp - 12, WA, &sta) < 0) {
+        fault_p1 = MM_WRITE | (sta & MM_EMASK);
+        ABORT ((sta & 4) ? ABORT_TNV : ABORT_ACV);
     }
-Write (RUN_PASS, tsp - 12, SXTW (opnd[0]), L_LONG, WA); /* push argument */
-Write (RUN_PASS, tsp - 8, PC, L_LONG, WA);              /* push PC */
-Write (RUN_PASS, tsp - 4, PSL | cc, L_LONG, WA);        /* push PSL */
-SP = tsp - 12;                                          /* set new stk */
-PSL = (mode << PSL_V_CUR) | (PSL & PSL_IPL) |           /* set new PSL */
-    (cur << PSL_V_PRV);                                 /* IPL unchanged */
+    Write(RUN_PASS, tsp - 12, SXTW (opnd[0]), L_LONG, WA); /* push argument */
+    Write(RUN_PASS, tsp - 8, PC, L_LONG, WA);              /* push PC */
+    Write(RUN_PASS, tsp - 4, PSL | cc, L_LONG, WA);        /* push PSL */
+    SP = tsp - 12;                                          /* set new stk */
+    PSL = (mode << PSL_V_CUR) | (PSL & PSL_IPL) |           /* set new PSL */
+          (cur << PSL_V_PRV);                                 /* IPL unchanged */
 // last_chm = fault_PC;
-JUMP (newpc & ~03);                                     /* set new PC */
-return 0;                                               /* cc = 0 */
+    JUMP (newpc & ~03);                                     /* set new PC */
+    return 0;                                               /* cc = 0 */
 }
 
 /* REI - return from exception or interrupt
@@ -1810,12 +1755,11 @@ Rule    SRM formulation                     Comment
  9      tmp<31> = 1 => tmp<cur_mode> = 3, tmp<prv_mode> = 3>, tmp<fpd,is,ipl> = 0 
 */
 
-int32 op_rei (RUN_DECL, int32 acc)
-{
+int32 op_rei(RUN_DECL, int32 acc) {
     int32 oldpsl = PSL;
     int32 oldpc = PC;
-    int32 newpc = Read (RUN_PASS, SP, L_LONG, RA);
-    int32 newpsl = Read (RUN_PASS, SP + 4, L_LONG, RA);
+    int32 newpc = Read(RUN_PASS, SP, L_LONG, RA);
+    int32 newpsl = Read(RUN_PASS, SP + 4, L_LONG, RA);
     int32 newcur = PSL_GETCUR (newpsl);
     int32 oldcur = PSL_GETCUR (PSL);
     int32 newipl, i;
@@ -1835,7 +1779,7 @@ int32 op_rei (RUN_DECL, int32 acc)
     else                                                    /* to k, skip 3,5,6 */
     {
         if ((newpsl & PSL_IS) &&                            /* setting IS? */
-           (((PSL & PSL_IS) == 0) || (newipl == 0)))        /* test rules 2,4 */
+            (((PSL & PSL_IS) == 0) || (newipl == 0)))        /* test rules 2,4 */
             RSVD_OPND_FAULT;                                /* else skip 2,4 */
         if (newipl > PSL_GETIPL (PSL))                      /* test rule 7 */
             RSVD_OPND_FAULT;
@@ -1843,7 +1787,7 @@ int32 op_rei (RUN_DECL, int32 acc)
 
     if (newpsl & PSL_CM)                                    /* setting cmode? */
     {
-        if (BadCmPSL (RUN_PASS, newpsl))                    /* validate PSL */
+        if (BadCmPSL(RUN_PASS, newpsl))                    /* validate PSL */
             RSVD_OPND_FAULT;
         for (i = 0; i < 7; i++)                             /* mask R0-R6, PC */
             R[i] = R[i] & WMASK;
@@ -1856,10 +1800,9 @@ int32 op_rei (RUN_DECL, int32 acc)
     else
         STK[oldcur] = SP;
 
-    if (DEBUG_PRI (cpu_dev, LOG_CPU_R))
-    {
-        fprintf (sim_deb, ">>REI: PC=%08x, PSL=%08x, SP=%08x, nPC=%08x, nPSL=%08x, nSP=%08x\n",
-                 PC, PSL, SP - 8, newpc, newpsl, ((newpsl & IS)? IS: STK[newcur]));
+    if (DEBUG_PRI (cpu_dev, LOG_CPU_R)) {
+        fprintf(sim_deb, ">>REI: PC=%08x, PSL=%08x, SP=%08x, nPC=%08x, nPSL=%08x, nSP=%08x\n",
+                PC, PSL, SP - 8, newpc, newpsl, ((newpsl & IS) ? IS : STK[newcur]));
     }
 
     PSL = (PSL & PSL_TP) | (newpsl & ~CC_MASK);             /* set PSL */
@@ -1868,13 +1811,11 @@ int32 op_rei (RUN_DECL, int32 acc)
     {
         SP = IS;
     }
-    else
-    {
+    else {
         SP = STK[newcur];                                   /* if ~IS, chk AST */
-        if (newcur >= ASTLVL)
-        {
+        if (newcur >= ASTLVL) {
             if (DEBUG_PRI (cpu_dev, LOG_CPU_R))
-                fprintf (sim_deb, ">>REI: AST delivered\n");
+                fprintf(sim_deb, ">>REI: AST delivered\n");
             SISR = SISR | SISR_2;
         }
     }
@@ -1894,9 +1835,8 @@ int32 op_rei (RUN_DECL, int32 acc)
     /*
      * Check if this is console ROM's CONTNUE REI
      */
-    if (unlikely(oldpc == ROM_PC_CONTINUE_REI) && cpu_unit->cpu_con_rei_on && 
-        mapen == 1 && CPU_CURRENT_CYCLES == cpu_unit->cpu_con_rei)
-    {
+    if (unlikely(oldpc == ROM_PC_CONTINUE_REI) && cpu_unit->cpu_con_rei_on &&
+        mapen == 1 && CPU_CURRENT_CYCLES == cpu_unit->cpu_con_rei) {
         /* returning from console mode to OS: reenter synchronization window if required */
         syncw_enable_cpu(RUN_PASS);
         syncw_reeval_sys(RUN_PASS);
@@ -1904,8 +1844,7 @@ int32 op_rei (RUN_DECL, int32 acc)
         /* thread priorty reevaluation will be performed by SET_IRQL below */
         cpu_on_changed_ipl(RUN_PASS, oldpsl, CHIPL_NO_THRDPRIO | CHIPL_NO_SYNCW);
     }
-    else
-    {
+    else {
         /* thread priorty reevaluation will be performed by SET_IRQL below */
         cpu_on_changed_ipl(RUN_PASS, oldpsl, CHIPL_NO_THRDPRIO);
     }
@@ -1918,8 +1857,7 @@ int32 op_rei (RUN_DECL, int32 acc)
 
 /* LDCPTX - load process context */
 
-void op_ldpctx (RUN_DECL, int32 acc)
-{
+void op_ldpctx(RUN_DECL, int32 acc) {
     int32 newpc, newpsl, pcbpa, t;
 
     if (PSL & PSL_CUR)                                      /* must be kernel */
@@ -1929,63 +1867,62 @@ void op_ldpctx (RUN_DECL, int32 acc)
 
     pcbpa = PCBB & PAMASK;                                  /* phys address */
 
-    KSP = ReadLP (RUN_PASS, pcbpa);                         /* restore stk ptrs */
-    ESP = ReadLP (RUN_PASS, pcbpa + 4);
-    SSP = ReadLP (RUN_PASS, pcbpa + 8);
-    USP = ReadLP (RUN_PASS, pcbpa + 12);
-    R[0] = ReadLP (RUN_PASS, pcbpa + 16);                   /* restore registers */
-    R[1] = ReadLP (RUN_PASS, pcbpa + 20);
-    R[2] = ReadLP (RUN_PASS, pcbpa + 24);
-    R[3] = ReadLP (RUN_PASS, pcbpa + 28);
-    R[4] = ReadLP (RUN_PASS, pcbpa + 32);
-    R[5] = ReadLP (RUN_PASS, pcbpa + 36);
-    R[6] = ReadLP (RUN_PASS, pcbpa + 40);
-    R[7] = ReadLP (RUN_PASS, pcbpa + 44);
-    R[8] = ReadLP (RUN_PASS, pcbpa + 48);
-    R[9] = ReadLP (RUN_PASS, pcbpa + 52);
-    R[10] = ReadLP (RUN_PASS, pcbpa + 56);
-    R[11] = ReadLP (RUN_PASS, pcbpa + 60);
-    R[12] = ReadLP (RUN_PASS, pcbpa + 64);
-    R[13] = ReadLP (RUN_PASS, pcbpa + 68);
-    newpc = ReadLP (RUN_PASS, pcbpa + 72);                            /* get PC, PSL */
-    newpsl = ReadLP (RUN_PASS, pcbpa + 76);
+    KSP = ReadLP(RUN_PASS, pcbpa);                         /* restore stk ptrs */
+    ESP = ReadLP(RUN_PASS, pcbpa + 4);
+    SSP = ReadLP(RUN_PASS, pcbpa + 8);
+    USP = ReadLP(RUN_PASS, pcbpa + 12);
+    R[0] = ReadLP(RUN_PASS, pcbpa + 16);                   /* restore registers */
+    R[1] = ReadLP(RUN_PASS, pcbpa + 20);
+    R[2] = ReadLP(RUN_PASS, pcbpa + 24);
+    R[3] = ReadLP(RUN_PASS, pcbpa + 28);
+    R[4] = ReadLP(RUN_PASS, pcbpa + 32);
+    R[5] = ReadLP(RUN_PASS, pcbpa + 36);
+    R[6] = ReadLP(RUN_PASS, pcbpa + 40);
+    R[7] = ReadLP(RUN_PASS, pcbpa + 44);
+    R[8] = ReadLP(RUN_PASS, pcbpa + 48);
+    R[9] = ReadLP(RUN_PASS, pcbpa + 52);
+    R[10] = ReadLP(RUN_PASS, pcbpa + 56);
+    R[11] = ReadLP(RUN_PASS, pcbpa + 60);
+    R[12] = ReadLP(RUN_PASS, pcbpa + 64);
+    R[13] = ReadLP(RUN_PASS, pcbpa + 68);
+    newpc = ReadLP(RUN_PASS, pcbpa + 72);                            /* get PC, PSL */
+    newpsl = ReadLP(RUN_PASS, pcbpa + 76);
 
-    t = ReadLP (RUN_PASS, pcbpa + 80);
+    t = ReadLP(RUN_PASS, pcbpa + 80);
     ML_PXBR_TEST (t);                                       /* validate P0BR */
     P0BR = t & BR_MASK;                                     /* restore P0BR */
-    t = ReadLP (RUN_PASS, pcbpa + 84);
+    t = ReadLP(RUN_PASS, pcbpa + 84);
     LP_MBZ84_TEST (t);                                      /* test mbz */
     ML_LR_TEST (t & LR_MASK);                               /* validate P0LR */
     P0LR = t & LR_MASK;                                     /* restore P0LR */
     t = (t >> 24) & AST_MASK;
     LP_AST_TEST (t);                                        /* validate AST */
     ASTLVL = t;                                             /* restore AST */
-    t = ReadLP (RUN_PASS, pcbpa + 88);
+    t = ReadLP(RUN_PASS, pcbpa + 88);
     ML_PXBR_TEST (t + 0x800000);                            /* validate P1BR */
     P1BR = t & BR_MASK;                                     /* restore P1BR */
-    t = ReadLP (RUN_PASS, pcbpa + 92);
+    t = ReadLP(RUN_PASS, pcbpa + 92);
     LP_MBZ92_TEST (t);                                      /* test MBZ */
     ML_LR_TEST (t & LR_MASK);                               /* validate P1LR */
     P1LR = t & LR_MASK;                                     /* restore P1LR */
     pme = (t >> 31) & 1;                                    /* restore PME */
 
-    zap_tb (RUN_PASS, 0);                                   /* clear process TB */
-    set_map_reg (RUN_PASS);
+    zap_tb(RUN_PASS, 0);                                   /* clear process TB */
+    set_map_reg(RUN_PASS);
     if (DEBUG_PRI (cpu_dev, LOG_CPU_P))
-        fprintf (sim_deb, ">>LDP: PC=%08x, PSL=%08x, SP=%08x, nPC=%08x, nPSL=%08x, nSP=%08x\n",
-                 PC, PSL, SP, newpc, newpsl, KSP);
+        fprintf(sim_deb, ">>LDP: PC=%08x, PSL=%08x, SP=%08x, nPC=%08x, nPSL=%08x, nSP=%08x\n",
+                PC, PSL, SP, newpc, newpsl, KSP);
     if (PSL & PSL_IS)                                       /* if istk, */
         IS = SP;
     PSL = PSL & ~PSL_IS;                                    /* switch to kstk */
     SP = KSP - 8;
-    Write (RUN_PASS, SP, newpc, L_LONG, WA);                /* push PC, PSL */
-    Write (RUN_PASS, SP + 4, newpsl, L_LONG, WA);
+    Write(RUN_PASS, SP, newpc, L_LONG, WA);                /* push PC, PSL */
+    Write(RUN_PASS, SP + 4, newpsl, L_LONG, WA);
 }
 
 /* SVPCTX - save processor context */
 
-void op_svpctx (RUN_DECL, int32 acc)
-{
+void op_svpctx(RUN_DECL, int32 acc) {
     int32 savpc, savpsl, pcbpa;
 
     if (PSL & PSL_CUR)                                      /* must be kernel */
@@ -1993,45 +1930,44 @@ void op_svpctx (RUN_DECL, int32 acc)
 
     syncw_leave_ilk(RUN_PASS);                              /* leave ILK synchronization window */
 
-    savpc = Read (RUN_PASS, SP, L_LONG, RA);                /* pop PC, PSL */
-    savpsl = Read (RUN_PASS, SP + 4, L_LONG, RA);
+    savpc = Read(RUN_PASS, SP, L_LONG, RA);                /* pop PC, PSL */
+    savpsl = Read(RUN_PASS, SP + 4, L_LONG, RA);
 
     if (DEBUG_PRI (cpu_dev, LOG_CPU_P))
-        fprintf (sim_deb, ">>SVP: PC=%08x, PSL=%08x, SP=%08x, oPC=%08x, oPSL=%08x\n",
-                 PC, PSL, SP, savpc, savpsl);
+        fprintf(sim_deb, ">>SVP: PC=%08x, PSL=%08x, SP=%08x, oPC=%08x, oPSL=%08x\n",
+                PC, PSL, SP, savpc, savpsl);
 
     if (PSL & PSL_IS)                                       /* int stack? */
         SP = SP + 8;
-    else
-    {
+    else {
         KSP = SP + 8;                                       /* pop kernel stack */
         SP = IS;                                            /* switch to int stk */
         if ((PSL & PSL_IPL) == 0)                           /* make IPL > 0 */
-             PSL = PSL | PSL_IPL1;
+            PSL = PSL | PSL_IPL1;
         PSL = PSL | PSL_IS;                                 /* set PSL<is> */
     }
 
     pcbpa = PCBB & PAMASK;
-    WriteLP (RUN_PASS, pcbpa, KSP);                         /* save stk ptrs */
-    WriteLP (RUN_PASS, pcbpa + 4, ESP);
-    WriteLP (RUN_PASS, pcbpa + 8, SSP);
-    WriteLP (RUN_PASS, pcbpa + 12, USP);
-    WriteLP (RUN_PASS, pcbpa + 16, R[0]);                   /* save registers */
-    WriteLP (RUN_PASS, pcbpa + 20, R[1]);
-    WriteLP (RUN_PASS, pcbpa + 24, R[2]);
-    WriteLP (RUN_PASS, pcbpa + 28, R[3]);
-    WriteLP (RUN_PASS, pcbpa + 32, R[4]);
-    WriteLP (RUN_PASS, pcbpa + 36, R[5]);
-    WriteLP (RUN_PASS, pcbpa + 40, R[6]);
-    WriteLP (RUN_PASS, pcbpa + 44, R[7]);
-    WriteLP (RUN_PASS, pcbpa + 48, R[8]);
-    WriteLP (RUN_PASS, pcbpa + 52, R[9]);
-    WriteLP (RUN_PASS, pcbpa + 56, R[10]);
-    WriteLP (RUN_PASS, pcbpa + 60, R[11]);
-    WriteLP (RUN_PASS, pcbpa + 64, R[12]);
-    WriteLP (RUN_PASS, pcbpa + 68, R[13]);
-    WriteLP (RUN_PASS, pcbpa + 72, savpc);                            /* save PC, PSL */
-    WriteLP (RUN_PASS, pcbpa + 76, savpsl);
+    WriteLP(RUN_PASS, pcbpa, KSP);                         /* save stk ptrs */
+    WriteLP(RUN_PASS, pcbpa + 4, ESP);
+    WriteLP(RUN_PASS, pcbpa + 8, SSP);
+    WriteLP(RUN_PASS, pcbpa + 12, USP);
+    WriteLP(RUN_PASS, pcbpa + 16, R[0]);                   /* save registers */
+    WriteLP(RUN_PASS, pcbpa + 20, R[1]);
+    WriteLP(RUN_PASS, pcbpa + 24, R[2]);
+    WriteLP(RUN_PASS, pcbpa + 28, R[3]);
+    WriteLP(RUN_PASS, pcbpa + 32, R[4]);
+    WriteLP(RUN_PASS, pcbpa + 36, R[5]);
+    WriteLP(RUN_PASS, pcbpa + 40, R[6]);
+    WriteLP(RUN_PASS, pcbpa + 44, R[7]);
+    WriteLP(RUN_PASS, pcbpa + 48, R[8]);
+    WriteLP(RUN_PASS, pcbpa + 52, R[9]);
+    WriteLP(RUN_PASS, pcbpa + 56, R[10]);
+    WriteLP(RUN_PASS, pcbpa + 60, R[11]);
+    WriteLP(RUN_PASS, pcbpa + 64, R[12]);
+    WriteLP(RUN_PASS, pcbpa + 68, R[13]);
+    WriteLP(RUN_PASS, pcbpa + 72, savpc);                            /* save PC, PSL */
+    WriteLP(RUN_PASS, pcbpa + 76, savpsl);
 }
 
 /* PROBER and PROBEW
@@ -2041,48 +1977,49 @@ void op_svpctx (RUN_DECL, int32 acc)
         opnd[2] =       base address
 */
 
-int32 op_probe (RUN_DECL, int32 *opnd, int32 rw)
-{
-int32 mode = opnd[0] & PSL_M_MODE;                      /* mask mode */
-int32 length = opnd[1];
-int32 ba = opnd[2];
-int32 prv = PSL_GETPRV (PSL);
-int32 acc, sta, sta1;
+int32 op_probe(RUN_DECL, int32 *opnd, int32 rw) {
+    int32 mode = opnd[0] & PSL_M_MODE;                      /* mask mode */
+    int32 length = opnd[1];
+    int32 ba = opnd[2];
+    int32 prv = PSL_GETPRV (PSL);
+    int32 acc, sta, sta1;
 
-if (prv > mode)                                         /* maximize mode */
-    mode = prv;
-acc = ACC_MASK (mode) << (rw? TLB_V_WACC: 0);           /* set acc mask */
-Test (RUN_PASS, ba, acc, &sta);                         /* probe */
-switch (sta) {                                          /* case on status */
+    if (prv > mode)                                         /* maximize mode */
+        mode = prv;
+    acc = ACC_MASK (mode) << (rw ? TLB_V_WACC : 0);           /* set acc mask */
+    Test(RUN_PASS, ba, acc, &sta);                         /* probe */
+    switch (sta) {                                          /* case on status */
 
-    case PR_PTNV:                                       /* pte TNV */
-        fault_p1 = MM_PARAM (rw, PR_PTNV);
-        fault_p2 = ba;
-        ABORT (ABORT_TNV);                              /* force TNV */
+        case PR_PTNV:                                       /* pte TNV */
+            fault_p1 = MM_PARAM (rw, PR_PTNV);
+            fault_p2 = ba;
+            ABORT (ABORT_TNV);                              /* force TNV */
 
-    case PR_TNV: case PR_OK:                            /* TNV or ok */
-        break;                                          /* continue */
+        case PR_TNV:
+        case PR_OK:                            /* TNV or ok */
+            break;                                          /* continue */
 
-    default:                                            /* other */
-        return CC_Z;                                    /* lose */
-        }
+        default:                                            /* other */
+            return CC_Z;                                    /* lose */
+    }
 
-Test (RUN_PASS, ba + length - 1, acc, &sta1);           /* probe end addr */
-switch (sta1) {                                         /* case on status */
+    Test(RUN_PASS, ba + length - 1, acc, &sta1);           /* probe end addr */
+    switch (sta1) {                                         /* case on status */
 
-    case PR_PTNV:                                       /* pte TNV */
-        fault_p1 = MM_PARAM (rw, PR_PTNV);
-        fault_p2 = ba + length - 1;
-        ABORT (ABORT_TNV);                              /* force TNV */
+        case PR_PTNV:                                       /* pte TNV */
+            fault_p1 = MM_PARAM (rw, PR_PTNV);
+            fault_p2 = ba + length - 1;
+            ABORT (ABORT_TNV);                              /* force TNV */
 
-    case PR_TNV: case PR_OK:                            /* TNV or ok */
-        break;                                          /* win */
+        case PR_TNV:
+        case PR_OK:                            /* TNV or ok */
+            break;                                          /* win */
 
-    default:                                            /* other */
-        return CC_Z;                                    /* lose */
-        }
+        default:                                            /* other */
+            return CC_Z;                                    /* lose */
+    }
 
-return 0;
+    return 0;
 }
 
 /* MTPR - move to processor register
@@ -2091,16 +2028,14 @@ return 0;
         opnd[1] =       register number
 */
 
-int32 op_mtpr (RUN_DECL, int32 *opnd)
-{
+int32 op_mtpr(RUN_DECL, int32 *opnd) {
     int32 val = opnd[0];
     int32 prn = opnd[1];
     int32 cc;
     t_bool set_irql = TRUE;
     t_bool keep_prefetch = FALSE;
 
-    if (prn == MT_SIMH)
-    {
+    if (prn == MT_SIMH) {
         /*
          * SIMH API call by guest.
          * This register can be written in user mode for QUERY API only.
@@ -2122,93 +2057,94 @@ int32 op_mtpr (RUN_DECL, int32 *opnd)
 
     switch (prn)                                        /* case on reg # */
     {
-    case MT_KSP:                                        /* KSP */
-        if (PSL & PSL_IS)                               /* on IS? store KSP */
-            KSP = val;
-        else
-            SP = val;                                   /* else store SP */
-        set_irql = FALSE;
-        break;
+        case MT_KSP:                                        /* KSP */
+            if (PSL & PSL_IS)                               /* on IS? store KSP */
+                KSP = val;
+            else
+                SP = val;                                   /* else store SP */
+            set_irql = FALSE;
+            break;
 
-    case MT_ESP: case MT_SSP: case MT_USP:              /* ESP, SSP, USP */
-        STK[prn] = val;                                 /* store stack */
-        set_irql = FALSE;
-        break;
+        case MT_ESP:
+        case MT_SSP:
+        case MT_USP:              /* ESP, SSP, USP */
+            STK[prn] = val;                                 /* store stack */
+            set_irql = FALSE;
+            break;
 
-    case MT_IS:                                         /* IS */
-        if (PSL & PSL_IS)                               /* on IS? store SP */
-            SP = val;
-        else
-            IS = val;                                  /* else store IS */
-        set_irql = FALSE;
-        break;
+        case MT_IS:                                         /* IS */
+            if (PSL & PSL_IS)                               /* on IS? store SP */
+                SP = val;
+            else
+                IS = val;                                  /* else store IS */
+            set_irql = FALSE;
+            break;
 
-    case MT_P0BR:                                       /* P0BR */
-        ML_PXBR_TEST (val);                             /* validate */
-        P0BR = val & BR_MASK;                           /* lw aligned */
-        zap_tb (RUN_PASS, 0);                           /* clr proc TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_P0BR:                                       /* P0BR */
+            ML_PXBR_TEST (val);                             /* validate */
+            P0BR = val & BR_MASK;                           /* lw aligned */
+            zap_tb(RUN_PASS, 0);                           /* clr proc TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_P0LR:                                       /* P0LR */
-        ML_LR_TEST (val & LR_MASK);                     /* validate */
-        P0LR = val & LR_MASK;
-        zap_tb (RUN_PASS, 0);                           /* clr proc TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_P0LR:                                       /* P0LR */
+            ML_LR_TEST (val & LR_MASK);                     /* validate */
+            P0LR = val & LR_MASK;
+            zap_tb(RUN_PASS, 0);                           /* clr proc TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_P1BR:                                       /* P1BR */
-        ML_PXBR_TEST (val + 0x800000);                  /* validate */
-        P1BR = val & BR_MASK;                           /* lw aligned */
-        zap_tb (RUN_PASS, 0);                           /* clr proc TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_P1BR:                                       /* P1BR */
+            ML_PXBR_TEST (val + 0x800000);                  /* validate */
+            P1BR = val & BR_MASK;                           /* lw aligned */
+            zap_tb(RUN_PASS, 0);                           /* clr proc TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_P1LR:                                       /* P1LR */
-        ML_LR_TEST (val & LR_MASK);                     /* validate */
-        P1LR = val & LR_MASK;
-        zap_tb (RUN_PASS, 0);                           /* clr proc TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_P1LR:                                       /* P1LR */
+            ML_LR_TEST (val & LR_MASK);                     /* validate */
+            P1LR = val & LR_MASK;
+            zap_tb(RUN_PASS, 0);                           /* clr proc TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_SBR:                                        /* SBR */
-        ML_SBR_TEST (val);                              /* validate */
-        SBR = val & BR_MASK;                            /* lw aligned */
-        zap_tb (RUN_PASS, 1);                           /* clr entire TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_SBR:                                        /* SBR */
+            ML_SBR_TEST (val);                              /* validate */
+            SBR = val & BR_MASK;                            /* lw aligned */
+            zap_tb(RUN_PASS, 1);                           /* clr entire TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_SLR:                                        /* SLR */
-        ML_LR_TEST (val & LR_MASK);                     /* validate */
-        SLR = val & LR_MASK;
-        zap_tb (RUN_PASS, 1);                           /* clr entire TLB */
-        set_map_reg (RUN_PASS);
-        break;
+        case MT_SLR:                                        /* SLR */
+            ML_LR_TEST (val & LR_MASK);                     /* validate */
+            SLR = val & LR_MASK;
+            zap_tb(RUN_PASS, 1);                           /* clr entire TLB */
+            set_map_reg(RUN_PASS);
+            break;
 
-    case MT_WHAMI:                                      /* WHAMI */
-        WHAMI = val;
-        set_irql = FALSE;
-        break;
+        case MT_WHAMI:                                      /* WHAMI */
+            WHAMI = val;
+            set_irql = FALSE;
+            break;
 
-    case MT_SCBB:                                       /* SCBB */
-        ML_PA_TEST (val);                               /* validate */
-        SCBB = val & BR_MASK;                           /* lw aligned */
-        /* set auxiliary variable for fast checks PA_MAY_BE_INSIDE_SCB() */
-        cpu_unit->cpu_context.scb_range_pamask = (uint32) SCBB & SCB_RANGE_PAMASK;
-        break;
+        case MT_SCBB:                                       /* SCBB */
+            ML_PA_TEST (val);                               /* validate */
+            SCBB = val & BR_MASK;                           /* lw aligned */
+            /* set auxiliary variable for fast checks PA_MAY_BE_INSIDE_SCB() */
+            cpu_unit->cpu_context.scb_range_pamask = (uint32) SCBB & SCB_RANGE_PAMASK;
+            break;
 
-    case MT_PCBB:                                       /* PCBB */
-        ML_PA_TEST (val);                               /* validate */
-        PCBB = val & BR_MASK;                           /* lw aligned */
-        set_irql = FALSE;
-        break;
+        case MT_PCBB:                                       /* PCBB */
+            ML_PA_TEST (val);                               /* validate */
+            PCBB = val & BR_MASK;                           /* lw aligned */
+            set_irql = FALSE;
+            break;
 
-    case MT_IPL:                                        /* IPL */
+        case MT_IPL:                                        /* IPL */
         {
             int32 newipl = val & PSL_M_IPL;
 
-            if (newipl != PSL_GETIPL(PSL))
-            {
+            if (newipl != PSL_GETIPL(PSL)) {
                 int32 oldpsl = PSL;
                 PSL = (PSL & ~PSL_IPL) | (newipl << PSL_V_IPL);
 
@@ -2226,42 +2162,38 @@ int32 op_mtpr (RUN_DECL, int32 *opnd)
                 /* thread priorty reevaluation will be performed by SET_IRQL below */
                 cpu_on_changed_ipl(RUN_PASS, oldpsl, CHIPL_NO_THRDPRIO);
             }
-            else
-            {
+            else {
                 /* IPL had not changed: no-op */
                 set_irql = FALSE;
             }
         }
-        break;
+            break;
 
-    case MT_ASTLVL:                                     /* ASTLVL */
-        if (val > AST_MAX)                              /* > 4? fault */
-            RSVD_OPND_FAULT;
-        ASTLVL = val;
-        break;
+        case MT_ASTLVL:                                     /* ASTLVL */
+            if (val > AST_MAX)                              /* > 4? fault */
+                RSVD_OPND_FAULT;
+            ASTLVL = val;
+            break;
 
-    case MT_SIRR:                                       /* SIRR */
-        if (val > 0xF || val == 0)
-            RSVD_OPND_FAULT;
-        SISR = SISR | (1 << val);                       /* set bit in SISR */
-        break;
+        case MT_SIRR:                                       /* SIRR */
+            if (val > 0xF || val == 0)
+                RSVD_OPND_FAULT;
+            SISR = SISR | (1 << val);                       /* set bit in SISR */
+            break;
 
-    case MT_SISR:                                       /* SISR */
-        SISR = val & SISR_MASK;
-        break;
+        case MT_SISR:                                       /* SISR */
+            SISR = val & SISR_MASK;
+            break;
 
-    case MT_MAPEN:                                      /* MAPEN */
+        case MT_MAPEN:                                      /* MAPEN */
         {
             int32 old_mapen = mapen;
             mapen = val & 1;
-            if (mapen == 0)
-            {
+            if (mapen == 0) {
                 cpu_on_clear_mapen(RUN_PASS);
             }
-            else
-            {
-                if (old_mapen == 0 && PC == ROM_PC_CONTINUE_MAPEN)
-                {
+            else {
+                if (old_mapen == 0 && PC == ROM_PC_CONTINUE_MAPEN) {
                     /* console ROM executing the CONTINUE command */
                     cpu_on_rom_continue(RUN_PASS);
                     cpu_unit->cpu_con_rei = CPU_CURRENT_CYCLES + 1;
@@ -2287,139 +2219,138 @@ int32 op_mtpr (RUN_DECL, int32 *opnd)
                 keep_prefetch = TRUE;
             }
         }
-        /* fall through */
-    case MT_TBIA:                                       /* TBIA */
-        zap_tb (RUN_PASS, 1, keep_prefetch);            /* clr entire TLB */
-        set_irql = FALSE;
-        break;
+            /* fall through */
+        case MT_TBIA:                                       /* TBIA */
+            zap_tb(RUN_PASS, 1, keep_prefetch);            /* clr entire TLB */
+            set_irql = FALSE;
+            break;
 
-    case MT_TBIS:                                       /* TBIS */
-        zap_tb_ent (RUN_PASS, val);
-        set_irql = FALSE;
-        break;
+        case MT_TBIS:                                       /* TBIS */
+            zap_tb_ent(RUN_PASS, val);
+            set_irql = FALSE;
+            break;
 
-    case MT_TBCHK:                                      /* TBCHK */
-        if (chk_tb_ent (RUN_PASS, val))
-            cc = cc | CC_V;
-        set_irql = FALSE;
-        break;
+        case MT_TBCHK:                                      /* TBCHK */
+            if (chk_tb_ent(RUN_PASS, val))
+                cc = cc | CC_V;
+            set_irql = FALSE;
+            break;
 
-    case MT_PME:                                        /* PME */
-        pme = val & 1;
-        break;
+        case MT_PME:                                        /* PME */
+            pme = val & 1;
+            break;
 
-    default:
-        WriteIPR (RUN_PASS, prn, val, set_irql);        /* others */
-        break;
+        default:
+            WriteIPR(RUN_PASS, prn, val, set_irql);        /* others */
+            break;
     }
 
-    if (set_irql)
-    {
+    if (set_irql) {
         SET_IRQL;                                       /* update intreq */
     }
 
     return cc;
 }
 
-int32 op_mfpr (RUN_DECL, int32 *opnd)
-{
-int32 prn = opnd[0];
-int32 val;
+int32 op_mfpr(RUN_DECL, int32 *opnd) {
+    int32 prn = opnd[0];
+    int32 val;
 
-if (PSL & PSL_CUR)                                      /* must be kernel */
-    RSVD_INST_FAULT;
-if (prn > 63)                                           /* reg# > 63? fault */
-    RSVD_OPND_FAULT;
-switch (prn) {                                          /* case on reg# */
+    if (PSL & PSL_CUR)                                      /* must be kernel */
+        RSVD_INST_FAULT;
+    if (prn > 63)                                           /* reg# > 63? fault */
+        RSVD_OPND_FAULT;
+    switch (prn) {                                          /* case on reg# */
 
-    case MT_KSP:                                        /* KSP */
-        val = (PSL & PSL_IS)? KSP: SP;                  /* return KSP or SP */
-        break;
+        case MT_KSP:                                        /* KSP */
+            val = (PSL & PSL_IS) ? KSP : SP;                  /* return KSP or SP */
+            break;
 
-    case MT_ESP: case MT_SSP: case MT_USP:              /* ESP, SSP, USP */
-        val = STK[prn];                                 /* return stk ptr */
-        break;
+        case MT_ESP:
+        case MT_SSP:
+        case MT_USP:              /* ESP, SSP, USP */
+            val = STK[prn];                                 /* return stk ptr */
+            break;
 
-    case MT_IS:                                         /* IS */
-        val = (PSL & PSL_IS)? SP: IS;                   /* return SP or IS */
-        break;
+        case MT_IS:                                         /* IS */
+            val = (PSL & PSL_IS) ? SP : IS;                   /* return SP or IS */
+            break;
 
-    case MT_P0BR:                                       /* P0BR */
-        val = P0BR;
-        break;
+        case MT_P0BR:                                       /* P0BR */
+            val = P0BR;
+            break;
 
-    case MT_P0LR:                                       /* P0LR */
-        val = P0LR;
-        break;
+        case MT_P0LR:                                       /* P0LR */
+            val = P0LR;
+            break;
 
-    case MT_P1BR:                                       /* P1BR */
-        val = P1BR;
-        break;
+        case MT_P1BR:                                       /* P1BR */
+            val = P1BR;
+            break;
 
-    case MT_P1LR:                                       /* P1LR */
-        val = P1LR;
-        break;
+        case MT_P1LR:                                       /* P1LR */
+            val = P1LR;
+            break;
 
-    case MT_SBR:                                        /* SBR */
-        val = SBR;
-        break;
+        case MT_SBR:                                        /* SBR */
+            val = SBR;
+            break;
 
-    case MT_SLR:                                        /* SLR */
-        val = SLR;
-        break;
+        case MT_SLR:                                        /* SLR */
+            val = SLR;
+            break;
 
-    case MT_CPUID:                                      /* CPUID */
-        val = ((int32) cpu_unit->cpu_id) & 0xFF;
-        break;
+        case MT_CPUID:                                      /* CPUID */
+            val = ((int32) cpu_unit->cpu_id) & 0xFF;
+            break;
 
-    case MT_WHAMI:                                      /* WHAMI */
-        val = WHAMI;
-        break;
+        case MT_WHAMI:                                      /* WHAMI */
+            val = WHAMI;
+            break;
 
-    case MT_SCBB:                                       /* SCBB */
-        val = SCBB;
-        break;
+        case MT_SCBB:                                       /* SCBB */
+            val = SCBB;
+            break;
 
-    case MT_PCBB:                                       /* PCBB */
-        val = PCBB;
-        break;
+        case MT_PCBB:                                       /* PCBB */
+            val = PCBB;
+            break;
 
-    case MT_IPL:                                        /* IPL */
-        val = PSL_GETIPL (PSL);
-        break;
+        case MT_IPL:                                        /* IPL */
+            val = PSL_GETIPL (PSL);
+            break;
 
-    case MT_ASTLVL:                                     /* ASTLVL */
-        val = ASTLVL;
-        break;
+        case MT_ASTLVL:                                     /* ASTLVL */
+            val = ASTLVL;
+            break;
 
-    case MT_SISR:                                       /* SISR */
-        val = SISR & SISR_MASK;
-        break;
+        case MT_SISR:                                       /* SISR */
+            val = SISR & SISR_MASK;
+            break;
 
-    case MT_MAPEN:                                      /* MAPEN */
-        val = mapen & 1;
-        break;
+        case MT_MAPEN:                                      /* MAPEN */
+            val = mapen & 1;
+            break;
 
-    case MT_PME:
-        val = pme & 1;
-        break;
+        case MT_PME:
+            val = pme & 1;
+            break;
 
-    case MT_SIRR:
-    case MT_TBIA:
-    case MT_TBIS:
-    case MT_TBCHK:
-        RSVD_OPND_FAULT;                                /* write only */
+        case MT_SIRR:
+        case MT_TBIA:
+        case MT_TBIS:
+        case MT_TBCHK:
+            RSVD_OPND_FAULT;                                /* write only */
 
-    default:                                            /* others */
-        val = ReadIPR (RUN_PASS, prn);                  /* read from SSC */
-        break;
-        }
+        default:                                            /* others */
+            val = ReadIPR(RUN_PASS, prn);                  /* read from SSC */
+            break;
+    }
 
-return val;
+    return val;
 }
 
-void cpu_on_changed_ipl(RUN_DECL, int32 oldpsl, int32 flags)
-{
+void cpu_on_changed_ipl(RUN_DECL, int32 oldpsl, int32 flags) {
     int32 old_ipl = PSL_GETIPL(oldpsl);
     int32 new_ipl = PSL_GETIPL(PSL);
 
@@ -2429,11 +2360,9 @@ void cpu_on_changed_ipl(RUN_DECL, int32 oldpsl, int32 flags)
     /*
      * reevaluate VCPU thread priority if IPL crosses sys_critical_section_ipl level
      */
-    if (unlikely(0 == (flags & CHIPL_NO_THRDPRIO)) && sys_critical_section_ipl > 0)
-    {
+    if (unlikely(0 == (flags & CHIPL_NO_THRDPRIO)) && sys_critical_section_ipl > 0) {
         if (old_ipl < sys_critical_section_ipl && new_ipl >= sys_critical_section_ipl ||
-            old_ipl >= sys_critical_section_ipl && new_ipl < sys_critical_section_ipl)
-        {
+            old_ipl >= sys_critical_section_ipl && new_ipl < sys_critical_section_ipl) {
             cpu_reevaluate_thread_priority(RUN_PASS);
         }
     }
@@ -2441,21 +2370,17 @@ void cpu_on_changed_ipl(RUN_DECL, int32 oldpsl, int32 flags)
     /*
      * manage synchronization window transitions
      */
-    if (0 == (flags & CHIPL_NO_SYNCW))
-    {
-        if (old_ipl < syncw.ipl_syslock && new_ipl >= syncw.ipl_syslock)
-        {
+    if (0 == (flags & CHIPL_NO_SYNCW)) {
+        if (old_ipl < syncw.ipl_syslock && new_ipl >= syncw.ipl_syslock) {
             syncw_enter_sys(RUN_PASS);
         }
-        else if (old_ipl >= syncw.ipl_syslock && new_ipl < syncw.ipl_syslock)
-        {
+        else if (old_ipl >= syncw.ipl_syslock && new_ipl < syncw.ipl_syslock) {
             if (new_ipl < syncw.ipl_resched)
                 syncw_leave_all(RUN_PASS, 0);
             else
                 syncw_leave_sys(RUN_PASS);
         }
-        else if (old_ipl >= syncw.ipl_resched && new_ipl < syncw.ipl_resched)
-        {
+        else if (old_ipl >= syncw.ipl_resched && new_ipl < syncw.ipl_resched) {
             syncw_leave_ilk(RUN_PASS);
         }
     }
@@ -2502,8 +2427,7 @@ void cpu_on_changed_ipl(RUN_DECL, int32 oldpsl, int32 flags)
  * Things would change however if SYNCLK thread was not used.
  *
  */
-void cpu_reevaluate_thread_priority(RUN_DECL, t_bool synced)
-{
+void cpu_reevaluate_thread_priority(RUN_DECL, t_bool synced) {
     RUN_SCOPE_RSCX_ONLY;
     sim_thread_priority_t newprio;
     t_bool is_active_clk_interrupt;
@@ -2518,37 +2442,32 @@ void cpu_reevaluate_thread_priority(RUN_DECL, t_bool synced)
      * Instead, it will be performed when target VCPU's thread starts or resumes
      * execution of instruction stream.
      */
-    if (unlikely(rscx->thread_type != SIM_THREAD_TYPE_CPU) || unlikely(rscx->thread_cpu_id != cpu_unit->cpu_id))
-    {
+    if (unlikely(rscx->thread_type != SIM_THREAD_TYPE_CPU) || unlikely(rscx->thread_cpu_id != cpu_unit->cpu_id)) {
         cpu_unit->cpu_thread_priority = SIMH_THREAD_PRIORITY_INVALID;
         return;
     }
 
     /* prune recursive calls */
-    if (cpu_unit->cpu_inside_reevaluate_thread_priority)
-    {
+    if (cpu_unit->cpu_inside_reevaluate_thread_priority) {
         cpu_unit->cpu_redo_reevaluate_thread_priority = TRUE;
         return;
     }
 
-again:
+    again:
 
-    if (unlikely(mapen == 0) && cpu_unit->is_primary_cpu())
-    {
+    if (unlikely(mapen == 0) && cpu_unit->is_primary_cpu()) {
         /* equivalent of is_os_running() */
         cpu_set_thread_priority(RUN_PASS, SIMH_THREAD_PRIORITY_CPU_RUN);
         return;
     }
 
-    if (unlikely(tmr_is_active(RUN_PASS)))
-    {
+    if (unlikely(tmr_is_active(RUN_PASS))) {
         /* check if SSC clocks are still active */
         cpu_set_thread_priority(RUN_PASS, SIMH_THREAD_PRIORITY_CPU_CALIBRATION);
         return;
     }
 
-    if (unlikely(rscx->vm_critical_locks != 0))
-    {
+    if (unlikely(rscx->vm_critical_locks != 0)) {
         /*
          * if code holds VM critical locks, run at elevated priority
          */
@@ -2556,8 +2475,7 @@ again:
         return;
     }
 
-    if (unlikely(rscx->os_hi_critical_locks != 0))
-    {
+    if (unlikely(rscx->os_hi_critical_locks != 0)) {
         /*
          * if code holds OS_HI critical locks, run at elevated priority
          */
@@ -2565,8 +2483,7 @@ again:
         return;
     }
 
-    if (unlikely(cpu_unit->cpu_active_clk_interrupt || cpu_unit->cpu_active_ipi_interrupt))
-    {
+    if (unlikely(cpu_unit->cpu_active_clk_interrupt || cpu_unit->cpu_active_ipi_interrupt)) {
         /*
          * if processing CLK or IPI interrupts, run at elevated priority
          */
@@ -2577,8 +2494,7 @@ again:
     /*
      * check if CLK or IPI interrupts are pending
      */
-    if (! synced)
-    {
+    if (!synced) {
         /* 
          * read_irqs_to_local can recursively call cpu_reevaluate_thread_priority.
          *
@@ -2605,16 +2521,12 @@ again:
         {
             hipl = IPL_CRDERR;
         }
-        else if (hipl = cpu_unit->cpu_intreg.highest_local_irql())
-        {
+        else if (hipl = cpu_unit->cpu_intreg.highest_local_irql()) {
             // use it
         }
-        else if (SISR)
-        {
-            for (int32 i = IPL_SMAX;  i >= 1;  i--)
-            {
-                if (SISR & (1 << i))
-                {
+        else if (SISR) {
+            for (int32 i = IPL_SMAX; i >= 1; i--) {
+                if (SISR & (1 << i)) {
                     hipl = i;
                     break;
                 }
@@ -2624,20 +2536,18 @@ again:
         cpu_unit->cpu_context.highest_irql = hipl;
 
         cpu_unit->cpu_inside_reevaluate_thread_priority = FALSE;
-        if (cpu_unit->cpu_redo_reevaluate_thread_priority)
-        {
+        if (cpu_unit->cpu_redo_reevaluate_thread_priority) {
             cpu_unit->cpu_redo_reevaluate_thread_priority = FALSE;
             synced = TRUE;
             goto again;
         }
     }
 
-    cpu_unit->cpu_intreg.query_local_clk_ipi(& is_active_clk_interrupt, & is_active_ipi_interrupt);
-    if (unlikely(is_active_clk_interrupt))  cpu_unit->cpu_active_clk_interrupt = TRUE;
-    if (unlikely(is_active_ipi_interrupt))  cpu_unit->cpu_active_ipi_interrupt = TRUE;
+    cpu_unit->cpu_intreg.query_local_clk_ipi(&is_active_clk_interrupt, &is_active_ipi_interrupt);
+    if (unlikely(is_active_clk_interrupt)) cpu_unit->cpu_active_clk_interrupt = TRUE;
+    if (unlikely(is_active_ipi_interrupt)) cpu_unit->cpu_active_ipi_interrupt = TRUE;
 
-    if (unlikely(cpu_unit->cpu_active_clk_interrupt || cpu_unit->cpu_active_ipi_interrupt))
-    {
+    if (unlikely(cpu_unit->cpu_active_clk_interrupt || cpu_unit->cpu_active_ipi_interrupt)) {
         /*
          * if CLK or IPI interrupts are pending, run at elevated priority
          */
@@ -2645,8 +2555,7 @@ again:
         return;
     }
 
-    if (unlikely(cpu_unit->cpu_synclk_pending != SynclkNotPending))
-    {
+    if (unlikely(cpu_unit->cpu_synclk_pending != SynclkNotPending)) {
         /*
          * if inside a period protected from CLK raising, and CLK raising is pending,
          * run at elevated priority
@@ -2655,30 +2564,27 @@ again:
         return;
     }
 
-    if (likely(sys_critical_section_ipl >= 0))
-    {
+    if (likely(sys_critical_section_ipl >= 0)) {
         if (unlikely(
-              sys_critical_section_ipl > 0 && PSL_GETIPL(PSL) >= sys_critical_section_ipl ||
-              (cpu_unit->cpu_context.highest_irql = cpu_unit->cpu_intreg.highest_local_irql()) >= sys_critical_section_ipl && cpu_unit->cpu_context.highest_irql
-            /* we do not need to check on the condition commented out below, a check for pending new interrupt,
-               since we just performed an RMB synchronization above and acquired uptodate IRQ set */
-            /* || IPL_HMAX >= sys_critical_section_ipl && cpu_unit->cpu_intreg.cas_changed(1, 1) */
-            ))
-        {
+                sys_critical_section_ipl > 0 && PSL_GETIPL(PSL) >= sys_critical_section_ipl ||
+                (cpu_unit->cpu_context.highest_irql = cpu_unit->cpu_intreg.highest_local_irql()) >=
+                sys_critical_section_ipl && cpu_unit->cpu_context.highest_irql
+        /* we do not need to check on the condition commented out below, a check for pending new interrupt,
+           since we just performed an RMB synchronization above and acquired uptodate IRQ set */
+        /* || IPL_HMAX >= sys_critical_section_ipl && cpu_unit->cpu_intreg.cas_changed(1, 1) */
+        )) {
             /*
              * if inside operating system critical section (or interrupt request is pending with IPL high enough),
              * run at elevated priority
              */
             newprio = SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS;
         }
-        else
-        {
+        else {
             /* otherwise run at normal priority */
             newprio = SIMH_THREAD_PRIORITY_CPU_RUN;
         }
     }
-    else
-    {
+    else {
         /* otherwise run at normal priority */
         newprio = SIMH_THREAD_PRIORITY_CPU_RUN;
     }
@@ -2697,8 +2603,7 @@ again:
  * Practical check is that we are either running on the secondary processor,
  * or on the primary with MAPEN enabled.
  */
-t_bool is_os_running(RUN_DECL)
-{
+t_bool is_os_running(RUN_DECL) {
     return cpu_unit->is_primary_cpu() ? (mapen != 0) : TRUE;
 }
 
@@ -2731,8 +2636,7 @@ t_bool is_os_running(RUN_DECL)
  * is not actually delivered to VAX code and is not visible at VAX code level, but causes only cache
  * synchronizaton at SIMH level.
  */
-void cpu_scb_written(int32 pa)
-{
+void cpu_scb_written(int32 pa) {
     /*
      * Use RUN_SCOPE instead of RUN_DECL since this routine is invoked extremely infrequently,
      * but calls to it are dispersed throughout many places. Therefore try to maintain calling code
@@ -2741,12 +2645,10 @@ void cpu_scb_written(int32 pa)
     RUN_SCOPE_RSCX;
 
     if ((uint32) pa >= (uint32) SCBB &&
-        (uint32) pa < (uint32) SCBB + SCB_SIZE)
-    {
+        (uint32) pa < (uint32) SCBB + SCB_SIZE) {
         smp_wmb();
 
-        for (uint32 cpu_ix = 0;  cpu_ix < sim_ncpus;  cpu_ix++)
-        {
+        for (uint32 cpu_ix = 0; cpu_ix < sim_ncpus; cpu_ix++) {
             if (cpu_units[cpu_ix] != cpu_unit || rscx->thread_type != SIM_THREAD_TYPE_CPU)
                 interrupt_ipi_rmb(RUN_PASS, cpu_units[cpu_ix]);
         }
@@ -2757,26 +2659,22 @@ static uint32 interrupt_percpu_devs[IPL_HLVL];
 uint32 devs_per_irql[IPL_HLVL];
 extern DEVICE sysd_dev;
 
-void sim_init_interrupt_info()
-{
+void sim_init_interrupt_info() {
     memset(interrupt_percpu_devs, 0, sizeof interrupt_percpu_devs);
     memset(devs_per_irql, 0, sizeof devs_per_irql);
 
-    DEVICE* dptr;
+    DEVICE *dptr;
 
-    for (int i = 0; (dptr = sim_devices[i]) != NULL; i++)
-    {
-        DIB* dib = (DIB*) dptr->ctxt;
-        if (dib == NULL || dib->vnum == 0)  continue;
+    for (int i = 0; (dptr = sim_devices[i]) != NULL; i++) {
+        DIB *dib = (DIB *) dptr->ctxt;
+        if (dib == NULL || dib->vnum == 0) continue;
         uint32 ix_ipl = IVCL_IPL(dib->vloc);
         uint32 dev = IVCL_DEV(dib->vloc);
-        for (int vn = 0;  vn < dib->vnum;  vn++, dev++)
-        {
+        for (int vn = 0; vn < dib->vnum; vn++, dev++) {
             /* Record highest device index used */
             devs_per_irql[ix_ipl] = imax(devs_per_irql[ix_ipl], dev + 1);
 
-            if (dptr->flags & DEV_PERCPU)
-            {
+            if (dptr->flags & DEV_PERCPU) {
                 interrupt_percpu_devs[ix_ipl] |= (1 << dev);
             }
         }
@@ -2800,13 +2698,11 @@ void sim_init_interrupt_info()
 }
 
 /* raise device interrupt */
-void interrupt_set_int(uint32 ix_ipl, uint32 dev, t_bool force_wakeup)
-{
+void interrupt_set_int(uint32 ix_ipl, uint32 dev, t_bool force_wakeup) {
     interrupt_set_int(NULL, ix_ipl, dev, force_wakeup);
 }
 
-void interrupt_set_int(CPU_UNIT* xcpu, uint32 ix_ipl, uint32 dev, t_bool force_wakeup)
-{
+void interrupt_set_int(CPU_UNIT *xcpu, uint32 ix_ipl, uint32 dev, t_bool force_wakeup) {
     RUN_SCOPE_RSCX;
     t_bool wakeup = FALSE;
 
@@ -2838,23 +2734,19 @@ void interrupt_set_int(CPU_UNIT* xcpu, uint32 ix_ipl, uint32 dev, t_bool force_w
     /*
      * Raise target VCPU's thread level priority to reflect pending interrupt
      */
-    if (sys_critical_section_ipl >= 0 && (int32) ipl >= sys_critical_section_ipl)
-    {
-        if (toself)
-        {
-            switch (cpu_unit->cpu_thread_priority)
-            {
-            case SIMH_THREAD_PRIORITY_CPU_CALIBRATION:
-            case SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM:
-            case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI:
-                break;
-            default:
-                cpu_set_thread_priority(RUN_PASS, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI);
-                break;
+    if (sys_critical_section_ipl >= 0 && (int32) ipl >= sys_critical_section_ipl) {
+        if (toself) {
+            switch (cpu_unit->cpu_thread_priority) {
+                case SIMH_THREAD_PRIORITY_CPU_CALIBRATION:
+                case SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM:
+                case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI:
+                    break;
+                default:
+                    cpu_set_thread_priority(RUN_PASS, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI);
+                    break;
             }
         }
-        else if (rscx->thread_type == SIM_THREAD_TYPE_CPU || rscx->thread_type == SIM_THREAD_TYPE_CLOCK)
-        {
+        else if (rscx->thread_type == SIM_THREAD_TYPE_CPU || rscx->thread_type == SIM_THREAD_TYPE_CLOCK) {
             /* 
              * Really want to raise target CPU thread priority to CRITICAL_OS or CRITICAL_OS_HI here, but the target
              * can already be at CRITICAL_VM, so use CRITICAL_VM to avoid undermining the target, but leave the mark 
@@ -2870,8 +2762,7 @@ void interrupt_set_int(CPU_UNIT* xcpu, uint32 ix_ipl, uint32 dev, t_bool force_w
              * We do however make limited attempt to keep the thread at CALIBRATON if it was already at CALIBRATION
              * and avoid resetting it to VM. The check below does not have to be perfect.
              */
-            if (must_control_prio())
-            {
+            if (must_control_prio()) {
                 if (weak_read(xcpu->sysd_active_mask) == 0)
                     smp_set_thread_priority(xcpu->cpu_thread, SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM);
                 else
@@ -2881,34 +2772,31 @@ void interrupt_set_int(CPU_UNIT* xcpu, uint32 ix_ipl, uint32 dev, t_bool force_w
                 xcpu->cpu_intreg.cas_changed(0, 1);
             }
         }
-        else if (rscx->thread_type == SIM_THREAD_TYPE_CONSOLE)
-        {
+        else if (rscx->thread_type == SIM_THREAD_TYPE_CONSOLE) {
             t_bool is_active_clk_interrupt;
             t_bool is_active_ipi_interrupt;
 
             /* console thread has access to xcpu->cpu_thread_priority */
-            switch (xcpu->cpu_thread_priority)
-            {
-            case SIMH_THREAD_PRIORITY_CPU_CALIBRATION:
-            case SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM:
-            case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI:
-                break;
-            case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS:
-                xcpu->cpu_intreg.query_local_clk_ipi(& is_active_clk_interrupt, & is_active_ipi_interrupt);
-                if (is_active_clk_interrupt)  xcpu->cpu_active_clk_interrupt = TRUE;
-                if (is_active_ipi_interrupt)  xcpu->cpu_active_ipi_interrupt = TRUE;
-                if (xcpu->cpu_active_clk_interrupt || xcpu->cpu_active_ipi_interrupt)
-                {
+            switch (xcpu->cpu_thread_priority) {
+                case SIMH_THREAD_PRIORITY_CPU_CALIBRATION:
+                case SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM:
+                case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI:
+                    break;
+                case SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS:
+                    xcpu->cpu_intreg.query_local_clk_ipi(&is_active_clk_interrupt, &is_active_ipi_interrupt);
+                    if (is_active_clk_interrupt) xcpu->cpu_active_clk_interrupt = TRUE;
+                    if (is_active_ipi_interrupt) xcpu->cpu_active_ipi_interrupt = TRUE;
+                    if (xcpu->cpu_active_clk_interrupt || xcpu->cpu_active_ipi_interrupt) {
+                        if (must_control_prio())
+                            smp_set_thread_priority(xcpu->cpu_thread, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI);
+                        xcpu->cpu_thread_priority = SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI;
+                    }
+                    break;
+                default:
                     if (must_control_prio())
-                        smp_set_thread_priority(xcpu->cpu_thread, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI);
-                    xcpu->cpu_thread_priority = SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS_HI;
-                }
-                break;
-            default:
-                if (must_control_prio())
-                    smp_set_thread_priority(xcpu->cpu_thread, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS);
-                xcpu->cpu_thread_priority = SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS;
-                break;
+                        smp_set_thread_priority(xcpu->cpu_thread, SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS);
+                    xcpu->cpu_thread_priority = SIMH_THREAD_PRIORITY_CPU_CRITICAL_OS;
+                    break;
             }
         }
     }
@@ -2921,30 +2809,25 @@ void interrupt_set_int(CPU_UNIT* xcpu, uint32 ix_ipl, uint32 dev, t_bool force_w
  * Raise interprocessor interrupt on 'xcpu'.
  * It is ok to invoke this routine on 'xcpu' than is not running, it is no-op then.
  */
-void interrupt_ipi(RUN_DECL, CPU_UNIT* xcpu, t_bool force_wakeup)
-{
+void interrupt_ipi(RUN_DECL, CPU_UNIT *xcpu, t_bool force_wakeup) {
     interrupt_set_int(xcpu, IPL_IPINTR, INT_V_IPINTR, force_wakeup);
 }
 
-void interrupt_ipi_rmb(RUN_DECL, CPU_UNIT* xcpu)
-{
+void interrupt_ipi_rmb(RUN_DECL, CPU_UNIT *xcpu) {
     RUN_SCOPE_RSCX_ONLY;
 
-    if (xcpu->cpu_id == rscx->thread_cpu_id && rscx->thread_type == SIM_THREAD_TYPE_CPU)
-    {
+    if (xcpu->cpu_id == rscx->thread_cpu_id && rscx->thread_type == SIM_THREAD_TYPE_CPU) {
         smp_rmb();
     }
-    else
-    {
+    else {
         xcpu->cpu_intreg.set_int(IPL_ABS_IPIRMB, INT_V_IPIRMB, FALSE);
     }
 }
 
 /* clear device interrupt */
-void interrupt_clear_int(uint32 ix_ipl, uint32 dev)
-{
+void interrupt_clear_int(uint32 ix_ipl, uint32 dev) {
     RUN_SCOPE_RSCX;
-    CPU_UNIT* xcpu;
+    CPU_UNIT *xcpu;
 
     uint32 ipl = ix_ipl + IPL_HMIN;
 
@@ -2968,15 +2851,14 @@ void interrupt_clear_int(uint32 ix_ipl, uint32 dev)
  * Read/write routines for SIMH REG's of device INT registers,
  * encoded as IRDATA_DEV.
  */
-t_value reg_irdata_dev_rd(REG* r, uint32 idx)
-{
+t_value reg_irdata_dev_rd(REG *r, uint32 idx) {
     RUN_SCOPE;
     uint32 ivcl = (uint32) (t_addr_val) r->loc;
     uint32 ix_ipl = IVCL_IPL(ivcl);
     uint32 dev = IVCL_DEV(ivcl);
     uint32 ipl = ix_ipl + IPL_HMIN;
 
-    CPU_UNIT* xcpu;
+    CPU_UNIT *xcpu;
 
     if (interrupt_percpu_devs[ix_ipl] & (1 << dev))
         xcpu = cpu_unit;
@@ -2986,8 +2868,7 @@ t_value reg_irdata_dev_rd(REG* r, uint32 idx)
     return xcpu->cpu_intreg.examine_int(ipl, dev) ? 1 : 0;
 }
 
-void reg_irdata_dev_wr(REG* r, uint32 idx, t_value value)
-{
+void reg_irdata_dev_wr(REG *r, uint32 idx, t_value value) {
     uint32 ivcl = (uint32) (t_addr_val) r->loc;
     uint32 ix_ipl = IVCL_IPL(ivcl);
     uint32 dev = IVCL_DEV(ivcl);
@@ -2998,8 +2879,7 @@ void reg_irdata_dev_wr(REG* r, uint32 idx, t_value value)
         interrupt_clear_int(ix_ipl, dev);
 }
 
-int reg_irdata_dev_vcpu(REG* r, uint32 idx)
-{
+int reg_irdata_dev_vcpu(REG *r, uint32 idx) {
     RUN_SCOPE;
     uint32 ivcl = (uint32) (t_addr_val) r->loc;
     uint32 ix_ipl = IVCL_IPL(ivcl);
@@ -3015,8 +2895,7 @@ int reg_irdata_dev_vcpu(REG* r, uint32 idx)
  * Read/write routines for SIMH REG's of IPL level interrupts (14-17),
  * encoded as IRDATA_LVL.
  */
-t_value reg_irdata_lvl_rd(REG* r, uint32 idx)
-{
+t_value reg_irdata_lvl_rd(REG *r, uint32 idx) {
     RUN_SCOPE;
     uint32 what_code = (uint32) (t_addr_val) r->loc;
     uint32 ipl = what_code & 31;
@@ -3025,12 +2904,11 @@ t_value reg_irdata_lvl_rd(REG* r, uint32 idx)
     if (ipl < IPL_HMIN || ipl > IPL_HMAX)
         return 0;
 
-    CPU_UNIT* xcpu = curr_cpu ? cpu_unit : &cpu_unit_0;
+    CPU_UNIT *xcpu = curr_cpu ? cpu_unit : &cpu_unit_0;
 
     t_value res = 0;
 
-    for (uint32 dev = 0; dev < devs_per_irql[ipl - IPL_HMIN];  dev++)
-    {
+    for (uint32 dev = 0; dev < devs_per_irql[ipl - IPL_HMIN]; dev++) {
         if (xcpu->cpu_intreg.examine_int(ipl, dev))
             res |= (t_value) (1u << dev);
     }
@@ -3038,8 +2916,7 @@ t_value reg_irdata_lvl_rd(REG* r, uint32 idx)
     return res;
 }
 
-void reg_irdata_lvl_wr(REG* r, uint32 idx, t_value value)
-{
+void reg_irdata_lvl_wr(REG *r, uint32 idx, t_value value) {
     RUN_SCOPE;
     uint32 what_code = (uint32) (t_addr_val) r->loc;
     uint32 ipl = what_code & 31;
@@ -3049,39 +2926,32 @@ void reg_irdata_lvl_wr(REG* r, uint32 idx, t_value value)
     if (ipl < IPL_HMIN || ipl > IPL_HMAX)
         return;
 
-    CPU_UNIT* xcpu = curr_cpu ? cpu_unit : &cpu_unit_0;
+    CPU_UNIT *xcpu = curr_cpu ? cpu_unit : &cpu_unit_0;
 
-    for (uint32 dev = 0; dev < devs_per_irql[ipl - IPL_HMIN];  dev++)
-    {
-        if (value & (t_value) (1u << dev))
-        {
+    for (uint32 dev = 0; dev < devs_per_irql[ipl - IPL_HMIN]; dev++) {
+        if (value & (t_value) (1u << dev)) {
             interrupt_set_int(xcpu, ix_ipl, dev);
         }
-        else
-        {
+        else {
             xcpu->cpu_intreg.clear_int(ipl, dev, FALSE);
         }
     }
 }
 
-int reg_irdata_lvl_vcpu(REG* r, uint32 idx)
-{
+int reg_irdata_lvl_vcpu(REG *r, uint32 idx) {
     RUN_SCOPE;
     return cpu_unit->cpu_id;
 }
 
-t_value reg_sirr_rd(REG* r, uint32 idx)
-{
+t_value reg_sirr_rd(REG *r, uint32 idx) {
     /* write-only register, return dummy value */
     return 0;
 }
 
-void reg_sirr_wr(REG* r, uint32 idx, t_value value)
-{
+void reg_sirr_wr(REG *r, uint32 idx, t_value value) {
     RUN_SCOPE;
 
-    if (value >= 1 && value <= 0xF)
-    {
+    if (value >= 1 && value <= 0xF) {
         SISR = SISR | (1 << value);
         SET_IRQL;
     }
@@ -3094,8 +2964,7 @@ void reg_sirr_wr(REG* r, uint32 idx, t_value value)
  * Called by sim_idle right before entering idle sleep.
  * If this function returns FALSE, idle sleep is not attempted.
  */
-t_bool cpu_may_sleep(RUN_DECL)
-{
+t_bool cpu_may_sleep(RUN_DECL) {
     /* 
      * check if received new interrupt
      */
@@ -3113,41 +2982,35 @@ t_bool cpu_may_sleep(RUN_DECL)
      * Check if stop is pending
      */
     smp_post_interlocked_rmb();
-    if (unlikely(weak_read(stop_cpus))) 
+    if (unlikely(weak_read(stop_cpus)))
         return FALSE;
-    
+
     /* 
      * check if the bit in idle CPU mask had been cleared
      */
-    if (sys_idle_cpu_mask_va && mapen && is_os_running(RUN_PASS))
-    {
+    if (sys_idle_cpu_mask_va && mapen && is_os_running(RUN_PASS)) {
         int32 acc = ACC_MASK(KERN);
         int32 mask = 0;         /* initialize to suppress false GCC warning */
         t_bool abort = FALSE;
 
-        sim_try
-        {
-            mask = Read (RUN_PASS, sys_idle_cpu_mask_va, L_LONG, RA);
+        sim_try {
+            mask = Read(RUN_PASS, sys_idle_cpu_mask_va, L_LONG, RA);
         }
-        sim_catch (sim_exception_ABORT, exabort)
-        {
-            if (cpu_unit->cpu_exception_ABORT == NULL && exabort->isAutoDelete())
-            {
+        sim_catch (sim_exception_ABORT, exabort) {
+            if (cpu_unit->cpu_exception_ABORT == NULL && exabort->isAutoDelete()) {
                 cpu_unit->cpu_exception_ABORT = exabort;
             }
-            else
-            {
+            else {
                 exabort->checkAutoDelete();
             }
             abort = TRUE;
         }
         sim_end_try
 
-        if (abort)
-        {
-            smp_printf ("\nOperating System CPU idle mask is non-readable\n");
+        if (abort) {
+            smp_printf("\nOperating System CPU idle mask is non-readable\n");
             if (sim_log)
-                fprintf (sim_log, "\nOperating System CPU idle mask is non-readable\n");
+                fprintf(sim_log, "\nOperating System CPU idle mask is non-readable\n");
             ABORT_INVALID_SYSOP;
         }
 
@@ -3172,9 +3035,8 @@ t_bool cpu_may_sleep(RUN_DECL)
  * Because of race condition with sim_idle this routine can sometimes produce spurious wakeups
  * out of sim_idle sleep.
  */
-void wakeup_cpu(CPU_UNIT *xcpu)
-{
-    if (smp_interlocked_cas_done_var(& xcpu->cpu_sleeping, 1, 1))
+void wakeup_cpu(CPU_UNIT *xcpu) {
+    if (smp_interlocked_cas_done_var(&xcpu->cpu_sleeping, 1, 1))
         xcpu->cpu_wakeup_event->set();
 }
 
@@ -3183,14 +3045,13 @@ void wakeup_cpu(CPU_UNIT *xcpu)
  * Wake up those CPUs whose "idle" bit had been reset so they can perform their scheduling cycle.
  * Called by the CPU that modifies the mask.
  */
-void wakeup_cpus(RUN_DECL, uint32 old_idle_mask, uint32 new_idle_mask)
-{
+void wakeup_cpus(RUN_DECL, uint32 old_idle_mask, uint32 new_idle_mask) {
     /* calculate wakeup set */
     uint32 wmask = old_idle_mask & ~new_idle_mask;
 
     /* remove current CPU from the wakeup set, since it is already awake */
     wmask &= ~(1 << cpu_unit->cpu_id);
-    if (wmask == 0)  return;
+    if (wmask == 0) return;
 
     /* 
      * flush out changed content of idle CPUs mask (operating system cell pointed by sys_idle_cpu_mask_va)
@@ -3204,11 +3065,9 @@ void wakeup_cpus(RUN_DECL, uint32 old_idle_mask, uint32 new_idle_mask)
      * Note we do not need to send IPIRMB because idle_sleep and cpu_may_sleep will perform RMB and
      * idle CPU mask checking before trying to enter idle sleep and also perform RMB after exiting the sleep.
      */
-    for (uint32 cpu_ix = 0;  cpu_ix < sim_ncpus;  cpu_ix++)
-    {
-        if (wmask & (1 << cpu_ix))
-        {
-            CPU_UNIT* xcpu = cpu_units[cpu_ix];
+    for (uint32 cpu_ix = 0; cpu_ix < sim_ncpus; cpu_ix++) {
+        if (wmask & (1 << cpu_ix)) {
+            CPU_UNIT *xcpu = cpu_units[cpu_ix];
             wakeup_cpu(xcpu);
         }
     }
@@ -3228,8 +3087,7 @@ void wakeup_cpus(RUN_DECL, uint32 old_idle_mask, uint32 new_idle_mask)
  *     when interlocked instruction completes and interlock is released.
  *
  */
-void cpu_begin_interlocked(RUN_DECL, volatile sim_thread_priority_t* sv_priority, volatile t_bool* sv_priority_stored)
-{
+void cpu_begin_interlocked(RUN_DECL, volatile sim_thread_priority_t *sv_priority, volatile t_bool *sv_priority_stored) {
     RUN_SCOPE_RSCX_ONLY;
     /*
      * See "VAX MP Techincal Overview" chapter "Implementation of VAX interlocked instructions"
@@ -3244,16 +3102,14 @@ void cpu_begin_interlocked(RUN_DECL, volatile sim_thread_priority_t* sv_priority
     // *sv_priority = cpu_unit->cpu_thread_priority;
     // *sv_priority_stored = TRUE;
 
-    if ((cpu_unit->cpu_thread_priority == SIMH_THREAD_PRIORITY_INVALID || 
-         cpu_unit->cpu_thread_priority < SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM) && 
-        likely(is_os_running(RUN_PASS)))
-    {
+    if ((cpu_unit->cpu_thread_priority == SIMH_THREAD_PRIORITY_INVALID ||
+         cpu_unit->cpu_thread_priority < SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM) &&
+        likely(is_os_running(RUN_PASS))) {
         cpu_set_thread_priority(RUN_PASS, SIMH_THREAD_PRIORITY_CPU_CRITICAL_VM);
     }
 }
 
-void cpu_end_interlocked(RUN_DECL, sim_thread_priority_t sv_priority, t_bool sv_priority_stored)
-{
+void cpu_end_interlocked(RUN_DECL, sim_thread_priority_t sv_priority, t_bool sv_priority_stored) {
     /*
      * Restore thread priority. Note that we cannot simply restore priority to sv_priority,
      * since priority might have been purposefully altered if interrupt was sent to this processor 
@@ -3263,29 +3119,26 @@ void cpu_end_interlocked(RUN_DECL, sim_thread_priority_t sv_priority, t_bool sv_
 }
 
 /* internal development/debugging tool */
-t_stat xdev_cmd(int32 flag, char *cptr)
-{
+t_stat xdev_cmd(int32 flag, char *cptr) {
     RUN_SCOPE;
     char gbuf[CBUFSIZE];
     t_stat r;
-    
+
     if (*cptr == 0)
         return SCPE_2FARG;
 
     cptr = get_glyph(cptr, gbuf, 0);
 
     /* XDEV IPI <cpu-id> */
-    if (streqi(gbuf, "ipi") && cptr && *cptr)
-    {
+    if (streqi(gbuf, "ipi") && cptr && *cptr) {
         uint32 ncpu = (uint32) get_uint(cptr, 10, sim_ncpus - 1, &r);
         if (r != SCPE_OK)
             return SCPE_ARG;
-        if (ncpu >= sim_ncpus || cpu_units[ncpu] == NULL)  return SCPE_ARG;
+        if (ncpu >= sim_ncpus || cpu_units[ncpu] == NULL) return SCPE_ARG;
         interrupt_ipi(RUN_PASS, cpu_units[ncpu]);
         return SCPE_OK;
     }
-    else
-    {
+    else {
         return SCPE_ARG;
     }
 }
@@ -3293,14 +3146,12 @@ t_stat xdev_cmd(int32 flag, char *cptr)
 /*
  * Pre-fault memory into working set
  */
-void cpu_prefault_memory()
-{
+void cpu_prefault_memory() {
     int npages = (int) (cpu_unit_0.capac / VA_PAGSIZE);
-    volatile t_byte* p = (volatile t_byte*) M;
+    volatile t_byte *p = (volatile t_byte *) M;
     volatile static t_byte b;
 
-    for (int k = 0;  k < npages;  k++)
-    {
+    for (int k = 0; k < npages; k++) {
         b = *p;
         p += VA_PAGSIZE;
     }
