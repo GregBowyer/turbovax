@@ -2208,7 +2208,82 @@ sim_try
 
         /* Dispatch to instructions */
 
-        switch (opc) {              
+        /**
+         * This table contains all the opcodes precalulated as goto jumps, where an opcode does not exist
+         * it is filled in with DO_FAULT to let the simulator handle it like the end use put in an invalid opcode
+         *
+         * The later opcodes are very sparse, which makes this table use more cache lines than needed. This 
+         * method however requires no branches and no instructions outside a pure lookup, deference and jump
+         */
+        static void* dispatch_table[] = {
+            &&DO_HALT,    &&DO_NOP,     &&DO_REI,     &&DO_BPT,     &&DO_RET,     &&DO_RSB,     &&DO_LDPCTX,  &&DO_SVPCTX,
+            &&DO_CVTPS,   &&DO_CVTSP,   &&DO_INDEX,   &&DO_CRC,     &&DO_PROBER,  &&DO_PROBEW,  &&DO_INSQUE,  &&DO_REMQUE,
+            &&DO_BSBB,    &&DO_BRB,     &&DO_BNEQ,    &&DO_BEQL,    &&DO_BGTR,    &&DO_BLEQ,    &&DO_JSB,     &&DO_JMP,
+            &&DO_BGEQ,    &&DO_BLSS,    &&DO_BGTRU,   &&DO_BLEQU,   &&DO_BVC,     &&DO_BVS,     &&DO_BGEQU,   &&DO_BLSSU,
+            &&DO_ADDP4,   &&DO_ADDP6,   &&DO_SUBP4,   &&DO_SUBP6,   &&DO_CVTPT,   &&DO_MULP,    &&DO_CVTTP,   &&DO_DIVP,
+            &&DO_MOVC3,   &&DO_CMPC3,   &&DO_SCANC,   &&DO_SPANC,   &&DO_MOVC5,   &&DO_CMPC5,   &&DO_MOVTC,   &&DO_MOVTUC,
+            &&DO_BSBW,    &&DO_BRW,     &&DO_CVTWL,   &&DO_CVTWB,   &&DO_MOVP,    &&DO_CMPP3,   &&DO_CVTPL,   &&DO_CMPP4,
+            &&DO_EDITPC,  &&DO_MATCHC,  &&DO_LOCC,    &&DO_SKPC,    &&DO_MOVZWL,  &&DO_ACBW,    &&DO_MOVAW,   &&DO_PUSHAW,
+            &&DO_ADDF2,   &&DO_ADDF3,   &&DO_SUBF2,   &&DO_SUBF3,   &&DO_MULF2,   &&DO_MULF3,   &&DO_DIVF2,   &&DO_DIVF3,
+            &&DO_CVTFB,   &&DO_CVTFW,   &&DO_CVTFL,   &&DO_CVTRFL,  &&DO_CVTBF,   &&DO_CVTWF,   &&DO_CVTLF,   &&DO_ACBF,
+            &&DO_MOVF,    &&DO_CMPF,    &&DO_MNEGF,   &&DO_TSTF,    &&DO_EMODF,   &&DO_POLYF,   &&DO_CVTFD,   &&DO_FAULT,
+            &&DO_ADAWI,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_INSQHI,  &&DO_INSQTI,  &&DO_REMQHI,  &&DO_REMQTI,
+            &&DO_ADDD2,   &&DO_ADDD3,   &&DO_SUBD2,   &&DO_SUBD3,   &&DO_MULD2,   &&DO_MULD3,   &&DO_DIVD2,   &&DO_DIVD3,
+            &&DO_CVTDB,   &&DO_CVTDW,   &&DO_CVTDL,   &&DO_CVTRDL,  &&DO_CVTBD,   &&DO_CVTWD,   &&DO_CVTLD,   &&DO_ACBD,
+            &&DO_MOVD,    &&DO_CMPD,    &&DO_MNEGD,   &&DO_TSTD,    &&DO_EMODD,   &&DO_POLYD,   &&DO_CVTDF,   &&DO_FAULT,
+            &&DO_ASHL,    &&DO_ASHQ,    &&DO_EMUL,    &&DO_EDIV,    &&DO_CLRQ,    &&DO_MOVQ,    &&DO_MOVAQ,   &&DO_PUSHAQ,
+            &&DO_ADDB2,   &&DO_ADDB3,   &&DO_SUBB2,   &&DO_SUBB3,   &&DO_MULB2,   &&DO_MULB3,   &&DO_DIVB2,   &&DO_DIVB3,
+            &&DO_BISB2,   &&DO_BISB3,   &&DO_BICB2,   &&DO_BICB3,   &&DO_XORB2,   &&DO_XORB3,   &&DO_MNEGB,   &&DO_CASEB,
+            &&DO_MOVB,    &&DO_CMPB,    &&DO_MCOMB,   &&DO_BITB,    &&DO_CLRB,    &&DO_TSTB,    &&DO_INCB,    &&DO_DECB,
+            &&DO_CVTBL,   &&DO_CVTBW,   &&DO_MOVZBL,  &&DO_MOVZBW,  &&DO_ROTL,    &&DO_ACBB,    &&DO_MOVAB,   &&DO_PUSHAB,
+            &&DO_ADDW2,   &&DO_ADDW3,   &&DO_SUBW2,   &&DO_SUBW3,   &&DO_MULW2,   &&DO_MULW3,   &&DO_DIVW2,   &&DO_DIVW3,
+            &&DO_BISW2,   &&DO_BISW3,   &&DO_BICW2,   &&DO_BICW3,   &&DO_XORW2,   &&DO_XORW3,   &&DO_MNEGW,   &&DO_CASEW,
+            &&DO_MOVW,    &&DO_CMPW,    &&DO_MCOMW,   &&DO_BITW,    &&DO_CLRW,    &&DO_TSTW,    &&DO_INCW,    &&DO_DECW,
+            &&DO_BISPSW,  &&DO_BICPSW,  &&DO_POPR,    &&DO_PUSHR,   &&DO_CHMK,    &&DO_CHME,    &&DO_CHMS,    &&DO_CHMU,
+            &&DO_ADDL2,   &&DO_ADDL3,   &&DO_SUBL2,   &&DO_SUBL3,   &&DO_MULL2,   &&DO_MULL3,   &&DO_DIVL2,   &&DO_DIVL3,
+            &&DO_BISL2,   &&DO_BISL3,   &&DO_BICL2,   &&DO_BICL3,   &&DO_XORL2,   &&DO_XORL3,   &&DO_MNEGL,   &&DO_CASEL,
+            &&DO_MOVL,    &&DO_CMPL,    &&DO_MCOML,   &&DO_BITL,    &&DO_CLRL,    &&DO_TSTL,    &&DO_INCL,    &&DO_DECL,
+            &&DO_ADWC,    &&DO_SBWC,    &&DO_MTPR,    &&DO_MFPR,    &&DO_MOVPSL,  &&DO_PUSHL,   &&DO_MOVAL,   &&DO_PUSHAL,
+            &&DO_BBS,     &&DO_BBC,     &&DO_BBSS,    &&DO_BBCS,    &&DO_BBSC,    &&DO_BBCC,    &&DO_BBSSI,   &&DO_BBCCI,
+            &&DO_BLBS,    &&DO_BLBC,    &&DO_FFS,     &&DO_FFC,     &&DO_CMPV,    &&DO_CMPZV,   &&DO_EXTV,    &&DO_EXTZV,
+            &&DO_INSV,    &&DO_ACBL,    &&DO_AOBLSS,  &&DO_AOBLEQ,  &&DO_SOBGEQ,  &&DO_SOBGTR,  &&DO_CVTLB,   &&DO_CVTLW,
+            &&DO_ASHP,    &&DO_CVTLP,   &&DO_CALLG,   &&DO_CALLS,   &&DO_XFC,     &&DO_FAULT,   &&DO_FAULT,   &&DO_PSUEDO_BUG,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_CVTDH,   &&DO_CVTGF,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_ADDG2,   &&DO_ADDG3,   &&DO_SUBG2,   &&DO_SUBG3,   &&DO_MULG2,   &&DO_MULG3,   &&DO_DIVG2,   &&DO_DIVG3,
+            &&DO_CVTGB,   &&DO_CVTGW,   &&DO_CVTGL,   &&DO_CVTRGL,  &&DO_CVTBG,   &&DO_CVTWG,   &&DO_CVTLG,   &&DO_ACBG,
+            &&DO_MOVG,    &&DO_CMPG,    &&DO_MNEGG,   &&DO_TSTG,    &&DO_EMODG,   &&DO_POLYG,   &&DO_CVTGH,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_ADDH2,   &&DO_ADDH3,   &&DO_SUBH2,   &&DO_SUBH3,   &&DO_MULH2,   &&DO_MULH3,   &&DO_DIVH2,   &&DO_DIVH3,
+            &&DO_CVTHB,   &&DO_CVTHW,   &&DO_CVTHL,   &&DO_CVTRHL,  &&DO_CVTBH,   &&DO_CVTWH,   &&DO_CVTLH,   &&DO_ACBH,
+            &&DO_MOVH,    &&DO_CMPH,    &&DO_MNEGH,   &&DO_TSTH,    &&DO_EMODH,   &&DO_POLYH,   &&DO_CVTHG,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_CLRO,    &&DO_MOVO,    &&DO_MOVAO,   &&DO_PUSHAO,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_CVTFH ,  &&DO_CVTFG ,  &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,
+            &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_FAULT,   &&DO_CVTHF ,  &&DO_CVTHD,
+        };
+
+        goto *dispatch_table[opc];
+
+        do {
 
         /* Single operand instructions with dest, write only - CLRx dst.wx
 
@@ -2217,17 +2292,17 @@ sim_try
                 va      =       virtual address
         */
 
-        case CLRB:
+        DO_CLRB:
             WRITE_B (0);                                    /* store result */
             CC_ZZ1P;                                        /* set cc's */
             break;
 
-        case CLRW:
+        DO_CLRW:
             WRITE_W (0);                                    /* store result */
             CC_ZZ1P;                                        /* set cc's */
             break;
 
-        case CLRL:
+        DO_CLRL:
             {
                 t_bool b_sys_mask = FALSE;
                 uint32 old_sys_mask = 0;                    /* initialize to suppress false GCC warning */
@@ -2260,7 +2335,7 @@ sim_try
             }
             break;
 
-        case CLRQ:
+        DO_CLRQ:
             WRITE_Q (0, 0);                                 /* store result */
             CC_ZZ1P;                                        /* set cc's */
             break;
@@ -2270,15 +2345,15 @@ sim_try
             opnd[0] =       source
     */
 
-        case TSTB:
+        DO_TSTB:
             CC_IIZZ_B (op0);                                /* set cc's */
             break;
 
-        case TSTW:
+        DO_TSTW:
             CC_IIZZ_W (op0);                                /* set cc's */
             break;
 
-        case TSTL:
+        DO_TSTL:
             CC_IIZZ_L (op0);                                /* set cc's */
 
             if (cc == CC_Z)
@@ -2305,37 +2380,37 @@ sim_try
             va      =       operand address
     */
 
-        case INCB:
+        DO_INCB:
             r = (op0 + 1) & BMASK;                          /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_ADD_B (r, 1, op0);                           /* set cc's */
             break;
 
-        case INCW:
+        DO_INCW:
             r = (op0 + 1) & WMASK;                          /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_ADD_W (r, 1, op0);                           /* set cc's */
             break;
 
-        case INCL:
+        DO_INCL:
             r = (op0 + 1) & LMASK;                          /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_ADD_L (r, 1, op0);                           /* set cc's */
             break;
 
-        case DECB:
+        DO_DECB:
             r = (op0 - 1) & BMASK;                          /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_SUB_B (r, 1, op0);                           /* set cc's */
             break;
 
-        case DECW:
+        DO_DECW:
             r = (op0 - 1) & WMASK;                          /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_SUB_W (r, 1, op0);                           /* set cc's */
             break;
 
-        case DECL:
+        DO_DECL:
             r = (op0 - 1) & LMASK;                          /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_SUB_L (r, 1, op0);                           /* set cc's */
@@ -2346,7 +2421,11 @@ sim_try
             opnd[0] =       source
     */
 
-        case PUSHL: case PUSHAB: case PUSHAW: case PUSHAL: case PUSHAQ:
+        DO_PUSHL:
+        DO_PUSHAB:
+        DO_PUSHAW:
+        DO_PUSHAL:
+        DO_PUSHAQ:
             Write (RUN_PASS, SP - 4, op0, L_LONG, WA);      /* push operand */
             SP = SP - 4;                                    /* decr stack ptr */
             CC_IIZP_L (op0);                                /* set cc's */
@@ -2360,77 +2439,83 @@ sim_try
             va      =       operand address
     */
 
-        case MOVB:
+        DO_MOVB:
             WRITE_B (op0);                                  /* result */
             CC_IIZP_B (op0);                                /* set cc's */
             break;
 
-        case MOVW: case MOVZBW:
+        DO_MOVW:
+        DO_MOVZBW:
             WRITE_W (op0);                                  /* result */
             CC_IIZP_W (op0);                                /* set cc's */
             break;
 
-        case MOVL: case MOVZBL: case MOVZWL:
-        case MOVAB: case MOVAW: case MOVAL: case MOVAQ:
+        DO_MOVL:
+        DO_MOVZBL:
+        DO_MOVZWL:
+        DO_MOVAB:
+        DO_MOVAW:
+        DO_MOVAL:
+        DO_MOVAQ:
             WRITE_L (op0);                                  /* result */
             CC_IIZP_L (op0);                                /* set cc's */
             break;
 
-        case MCOMB:
+        DO_MCOMB:
             r = op0 ^ BMASK;                                /* compl opnd */
             WRITE_B (r);                                    /* store result */
             CC_IIZP_B (r);                                  /* set cc's */
             break;
 
-        case MCOMW:
+        DO_MCOMW:
             r = op0 ^ WMASK;                                /* compl opnd */
             WRITE_W (r);                                    /* store result */
             CC_IIZP_W (r);                                  /* set cc's */
             break;
 
-        case MCOML:
+        DO_MCOML:
             r = op0 ^ LMASK;                                /* compl opnd */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
             break;
 
-        case MNEGB:
+        DO_MNEGB:
             r = (-op0) & BMASK;                             /* negate opnd */
             WRITE_B (r);                                    /* store result */
             CC_SUB_B (r, op0, 0);                           /* set cc's */
             break;
 
-        case MNEGW:
+        DO_MNEGW:
             r = (-op0) & WMASK;                             /* negate opnd */
             WRITE_W (r);                                    /* store result */
             CC_SUB_W (r, op0, 0);                           /* set cc's */
             break;
 
-        case MNEGL:
+        DO_MNEGL:
             r = (-op0) & LMASK;                             /* negate opnd */
             WRITE_L (r);                                    /* store result */
             CC_SUB_L (r, op0, 0);                           /* set cc's */
             break;
 
-        case CVTBW:
+        DO_CVTBW:
             r = SXTBW (op0);                                /* ext sign */
             WRITE_W (r);                                    /* store result */
             CC_IIZZ_W (r);                                  /* set cc's */
             break;
 
-        case CVTBL:
+        DO_CVTBL:
             r = SXTB (op0);                                 /* ext sign */
             WRITE_L (r);                                    /* store result */
             CC_IIZZ_L (r);                                  /* set cc's */
             break;
 
-        case CVTWL:
+        DO_CVTWL:
             r = SXTW (op0);                                 /* ext sign */
             WRITE_L (r);                                    /* store result */
             CC_IIZZ_L (r);                                  /* set cc's */
             break;
 
-        case CVTLB:
+        DO_CVTLB:
             r = op0 & BMASK;                                /* set result */
             WRITE_B (r);                                    /* store result */
             CC_IIZZ_B (r);                                  /* initial cc's */
@@ -2439,7 +2524,7 @@ sim_try
                 }
             break;
 
-        case CVTLW:
+        DO_CVTLW:
             r = op0 & WMASK;                                /* set result */
             WRITE_W (r);                                    /* store result */
             CC_IIZZ_W (r);                                  /* initial cc's */
@@ -2448,7 +2533,7 @@ sim_try
                 }
             break;
 
-        case CVTWB:
+        DO_CVTWB:
             r = op0 & BMASK;                                /* set result */
             WRITE_B (r);                                    /* store result */
             CC_IIZZ_B (r);                                  /* initial cc's */
@@ -2458,7 +2543,7 @@ sim_try
                 }
             break;
 
-        case ADAWI:
+        DO_ADAWI:
             /* pass "va" as conditonal to suppress false GCC warning */
             op_adawi (RUN_PASS, opnd, acc, spec, rn, (spec > (GRN | nPC)) ? va : 0, cc /* cc passed by reference*/);
             break;
@@ -2469,29 +2554,29 @@ sim_try
                 opnd[1] =       source2
         */
 
-        case CMPB:
+        DO_CMPB:
             CC_CMP_B (op0, op1);                            /* set cc's */
             break;
 
-        case CMPW:
+        DO_CMPW:
             CC_CMP_W (op0, op1);                            /* set cc's */
             break;
 
-        case CMPL:
+        DO_CMPL:
             CC_CMP_L (op0, op1);                            /* set cc's */
             break;
 
-        case BITB:
+        DO_BITB:
             r = op1 & op0;                                  /* calc result */
             CC_IIZP_B (r);                                  /* set cc's */
             break;
 
-        case BITW:
+        DO_BITW:
             r = op1 & op0;                                  /* calc result */
             CC_IIZP_W (r);                                  /* set cc's */
             break;
 
-        case BITL:
+        DO_BITL:
             r = op1 & op0;                                  /* calc result */
             CC_IIZP_L (r);                                  /* set cc's */
 
@@ -2520,19 +2605,21 @@ sim_try
             va      =       memory address
     */
 
-        case ADDB2: case ADDB3:
+        DO_ADDB2:
+        DO_ADDB3:
             r = (op1 + op0) & BMASK;                        /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_ADD_B (r, op0, op1);                         /* set cc's */
             break;
 
-        case ADDW2: case ADDW3:
+        DO_ADDW2:
+        DO_ADDW3:
             r = (op1 + op0) & WMASK;                        /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_ADD_W (r, op0, op1);                         /* set cc's */
             break;
 
-        case ADWC:
+        DO_ADWC:
             r = (op1 + op0 + (cc & CC_C)) & LMASK;          /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_ADD_L (r, op0, op1);                         /* set cc's */
@@ -2540,25 +2627,28 @@ sim_try
                 cc = cc | CC_C;
             break;
 
-        case ADDL2: case ADDL3:
+        DO_ADDL2:
+        DO_ADDL3:
             r = (op1 + op0) & LMASK;                        /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_ADD_L (r, op0, op1);                         /* set cc's */
             break;
 
-        case SUBB2: case SUBB3:
+        DO_SUBB2:
+        DO_SUBB3:
             r = (op1 - op0) & BMASK;                        /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_SUB_B (r, op0, op1);                         /* set cc's */
             break;
 
-        case SUBW2: case SUBW3:
+        DO_SUBW2:
+        DO_SUBW3:
             r = (op1 - op0) & WMASK;                        /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_SUB_W (r, op0, op1);                         /* set cc's */
             break;
 
-        case SBWC:
+        DO_SBWC:
             r = (op1 - op0 - (cc & CC_C)) & LMASK;          /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_SUB_L (r, op0, op1);                         /* set cc's */
@@ -2566,13 +2656,15 @@ sim_try
                 cc = cc | CC_C;
             break;
 
-        case SUBL2: case SUBL3:
+        DO_SUBL2:
+        DO_SUBL3:
             r = (op1 - op0) & LMASK;                        /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_SUB_L (r, op0, op1);                         /* set cc's */
             break;
 
-        case MULB2: case MULB3:
+        DO_MULB2:
+        DO_MULB3:
             temp = SXTB (op0) * SXTB (op1);                 /* multiply */
             r = temp & BMASK;                               /* mask to result */
             WRITE_B (r);                                    /* store result */
@@ -2582,7 +2674,8 @@ sim_try
                 }
             break;
 
-        case MULW2: case MULW3:
+        DO_MULW2:
+        DO_MULW3:
             temp = SXTW (op0) * SXTW (op1);                 /* multiply */
             r = temp & WMASK;                               /* mask to result */
             WRITE_W (r);                                    /* store result */
@@ -2592,7 +2685,8 @@ sim_try
                 }
             break;
 
-        case MULL2: case MULL3:
+        DO_MULL2:
+        DO_MULL3:
             r = op_emul (RUN_PASS, op0, op1, &rh);          /* get 64b result */
             WRITE_L (r);                                    /* store result */
             CC_IIZZ_L (r);                                  /* set cc's */
@@ -2601,7 +2695,8 @@ sim_try
                 }
             break;
 
-        case DIVB2: case DIVB3:
+        DO_DIVB2:
+        DO_DIVB3:
             if (op0 == 0) {                                 /* div by zero? */
                 r = op1;
                 temp = CC_V;
@@ -2622,7 +2717,8 @@ sim_try
             cc = cc | temp;                                 /* error? set V */
             break;
 
-        case DIVW2: case DIVW3:
+        DO_DIVW2:
+        DO_DIVW3:
             if (op0 == 0) {                                 /* div by zero? */
                 r = op1;
                 temp = CC_V;
@@ -2643,7 +2739,8 @@ sim_try
             cc = cc | temp;                                 /* error? set V */
             break;
 
-        case DIVL2: case DIVL3:
+        DO_DIVL2:
+        DO_DIVL3:
             if (op0 == 0) {                                 /* div by zero? */
                 r = op1;
                 temp = CC_V;
@@ -2664,37 +2761,43 @@ sim_try
             cc = cc | temp;                                 /* error? set V */
             break;
 
-        case BISB2: case BISB3:
+        DO_BISB2:
+        DO_BISB3:
             r = op1 | op0;                                  /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_IIZP_B (r);                                  /* set cc's */
             break;
 
-        case BISW2: case BISW3:
+        DO_BISW2:
+        DO_BISW3:
             r = op1 | op0;                                  /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_IIZP_W (r);                                  /* set cc's */
             break;
 
-        case BISL2: case BISL3:
+        DO_BISL2:
+        DO_BISL3:
             r = op1 | op0;                                  /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
             break;
 
-        case BICB2: case BICB3:
+        DO_BICB2:
+        DO_BICB3:
             r = op1 & ~op0;                                 /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_IIZP_B (r);                                  /* set cc's */
             break;
 
-        case BICW2: case BICW3:
+        DO_BICW2:
+        DO_BICW3:
             r = op1 & ~op0;                                 /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_IIZP_W (r);                                  /* set cc's */
             break;
 
-        case BICL2: case BICL3:
+        DO_BICL2:
+        DO_BICL3:
             {
                 t_bool b_sys_mask = FALSE;
                 uint32 old_sys_mask = 0;                    /* initialize to suppress false GCC warning */
@@ -2728,19 +2831,22 @@ sim_try
             }
             break;
 
-        case XORB2: case XORB3:
+        DO_XORB2:
+        DO_XORB3:
             r = op1 ^ op0;                                  /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_IIZP_B (r);                                  /* set cc's */
             break;
 
-        case XORW2: case XORW3:
+        DO_XORW2:
+        DO_XORW3:
             r = op1 ^ op0;                                  /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_IIZP_W (r);                                  /* set cc's */
             break;
 
-        case XORL2: case XORL3:
+        DO_XORL2:
+        DO_XORL3:
             r = op1 ^ op0;                                  /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -2755,7 +2861,7 @@ sim_try
             
     */
 
-        case MOVQ:
+        DO_MOVQ:
             WRITE_Q (op0, op1);                             /* store result */
             CC_IIZP_Q (op0, op1);
             break;
@@ -2769,7 +2875,7 @@ sim_try
             va      =       memory address
     */
 
-        case ROTL:
+        DO_ROTL:
             j = op0 % 32;                                   /* reduce sc, mod 32 */
             if (j)
                 r = ((((uint32) op1) << j) | (((uint32) op1) >> (32 - j))) & LMASK;
@@ -2778,7 +2884,7 @@ sim_try
             CC_IIZP_L (r);                                  /* set cc's */
             break;
 
-        case ASHL:
+        DO_ASHL:
             if (op0 & BSIGN) {                              /* right shift? */
                 temp = 0x100 - op0;                         /* get |shift| */
                 if (temp > 31)                              /* sc > 31? */
@@ -2803,7 +2909,7 @@ sim_try
                 }
             break;
 
-        case ASHQ:
+        DO_ASHQ:
             r = op_ashq (RUN_PASS, opnd, &rh, &flg);        /* do qw shift */
             WRITE_Q (r, rh);                                /* store results */
             CC_IIZZ_Q (r, rh);                              /* set cc's */
@@ -2820,7 +2926,7 @@ sim_try
             op3:op4 =       destination (.wq)
     */
 
-        case EMUL:
+        DO_EMUL:
             r = op_emul (RUN_PASS, op0, op1, &rh);          /* calc 64b result */
             r = r + op2;                                    /* add 32b value */
             rh = rh + (((uint32) r) < ((uint32) op2)) -     /* into 64b result */
@@ -2837,7 +2943,7 @@ sim_try
             op5:op6 =       remainder address (.wl)
     */
 
-        case EDIV:
+        DO_EDIV:
             if (op5 < 0)                                    /* wtest remainder */
                 Read (RUN_PASS, op6, L_LONG, WA);
             if (op0 == 0) {                                 /* divide by zero? */
@@ -2866,7 +2972,7 @@ sim_try
 
     /* Simple branches and subroutine calls */
 
-        case BRB:
+        DO_BRB:
             BRANCHB (brdisp);                               /* branch  */
             if (PC == fault_PC)
             {
@@ -2877,7 +2983,7 @@ sim_try
             }
             break;
 
-        case BRW:
+        DO_BRW:
             BRANCHW (brdisp);                               /* branch */
             if (PC == fault_PC)
             {
@@ -2888,34 +2994,34 @@ sim_try
             }
             break;
 
-        case BSBB:
+        DO_BSBB:
             Write (RUN_PASS, SP - 4, PC, L_LONG, WA);       /* push PC on stk */
             SP = SP - 4;                                    /* decr stk ptr */
             BRANCHB (brdisp);                               /* branch  */
             break;
 
-        case BSBW:
+        DO_BSBW:
             Write (RUN_PASS, SP - 4, PC, L_LONG, WA);       /* push PC on stk */
             SP = SP - 4;                                    /* decr stk ptr */
             BRANCHW (brdisp);                               /* branch */
             break;
 
-        case BGEQ:
+        DO_BGEQ:
             if (!(cc & CC_N))                               /* br if N = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BLSS:
+        DO_BLSS:
             if (cc & CC_N)                                  /* br if N = 1 */
                 BRANCHB (brdisp);
             break;
 
-        case BNEQ:
+        DO_BNEQ:
             if (!(cc & CC_Z))                               /* br if Z = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BEQL:
+        DO_BEQL:
             if (cc & CC_Z)                                  /* br if Z = 1 */
             {
                 BRANCHB (brdisp);
@@ -2931,42 +3037,42 @@ sim_try
 
             break;
 
-        case BVC:
+        DO_BVC:
             if (!(cc & CC_V))                               /* br if V = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BVS:
+        DO_BVS:
             if (cc & CC_V)                                  /* br if V = 1 */
                 BRANCHB (brdisp);
             break;
 
-        case BGEQU:
+        DO_BGEQU:
             if (!(cc & CC_C))                               /* br if C = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BLSSU:
+        DO_BLSSU:
             if (cc & CC_C)                                  /* br if C = 1 */
                 BRANCHB (brdisp);
             break;
 
-        case BGTR:
+        DO_BGTR:
             if (!(cc & (CC_N | CC_Z)))                      /* br if N | Z = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BLEQ:
+        DO_BLEQ:
             if (cc & (CC_N | CC_Z))                         /* br if N | Z = 1 */
                 BRANCHB (brdisp);
             break;
 
-        case BGTRU:
+        DO_BGTRU:
             if (!(cc & (CC_C | CC_Z)))                      /* br if C | Z = 0 */
                 BRANCHB (brdisp);
             break;
 
-        case BLEQU:
+        DO_BLEQU:
             if (cc & (CC_C | CC_Z))                         /* br if C | Z = 1 */
                 BRANCHB (brdisp);
             break;
@@ -2976,15 +3082,15 @@ sim_try
             opnd[0] =       address
     */
 
-        case JSB:
+        DO_JSB:
             Write (RUN_PASS, SP - 4, PC, L_LONG, WA);       /* push PC on stk */
             SP = SP - 4;                                    /* decr stk ptr */
 
-        case JMP:
+        DO_JMP:
             JUMP (op0);                                     /* jump */
             break;
 
-        case RSB:
+        DO_RSB:
             temp = Read (RUN_PASS, SP, L_LONG, RA);         /* get top of stk */
             SP = SP + 4;                                    /* incr stk ptr */
             JUMP (temp);
@@ -2998,7 +3104,7 @@ sim_try
             va      =       memory address
     */
 
-        case SOBGEQ:
+        DO_SOBGEQ:
             r = op0 - 1;                                    /* decr index */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3007,7 +3113,7 @@ sim_try
                 BRANCHB (brdisp);
             break;
 
-        case SOBGTR:
+        DO_SOBGTR:
             r = op0 - 1;                                    /* decr index */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3025,7 +3131,7 @@ sim_try
             va      =       memory address
     */
 
-        case AOBLSS:
+        DO_AOBLSS:
             r = op1 + 1;                                    /* incr index */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3034,7 +3140,7 @@ sim_try
                 BRANCHB (brdisp);
             break;
 
-        case AOBLEQ:
+        DO_AOBLEQ:
             r = op1 + 1;                                    /* incr index */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3053,7 +3159,7 @@ sim_try
             va      =       memory address
     */
 
-        case ACBB:
+        DO_ACBB:
             r = (op2 + op1) & BMASK;                        /* calc result */
             WRITE_B (r);                                    /* store result */
             CC_IIZP_B (r);                                  /* set cc's */
@@ -3062,7 +3168,7 @@ sim_try
                 BRANCHW (brdisp);
             break;
 
-        case ACBW:
+        DO_ACBW:
             r = (op2 + op1) & WMASK;                        /* calc result */
             WRITE_W (r);                                    /* store result */
             CC_IIZP_W (r);                                  /* set cc's */
@@ -3071,7 +3177,7 @@ sim_try
                 BRANCHW (brdisp);
             break;
 
-        case ACBL:
+        DO_ACBL:
             r = (op2 + op1) & LMASK;                        /* calc result */
             WRITE_L (r);                                    /* store result */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3087,7 +3193,7 @@ sim_try
             opnd[2] =       limit
     */
 
-        case CASEB:
+        DO_CASEB:
             r = (op0 - op1) & BMASK;                        /* sel - base */
             CC_CMP_B (r, op2);                              /* r:limit, set cc's */
             if (r > op2)                                    /* r > limit (unsgnd)? */
@@ -3098,7 +3204,7 @@ sim_try
                 }
             break;
 
-        case CASEW:
+        DO_CASEW:
             r = (op0 - op1) & WMASK;                        /* sel - base */
             CC_CMP_W (r, op2);                              /* r:limit, set cc's */
             if (r > op2)                                    /* r > limit (unsgnd)? */
@@ -3109,7 +3215,7 @@ sim_try
                 }
             break;
 
-        case CASEL:
+        DO_CASEL:
             r = (op0 - op1) & LMASK;                        /* sel - base */
             CC_CMP_L (r, op2);                              /* r:limit, set cc's */
             if (((uint32) r) > ((uint32) op2))              /* r > limit (unsgnd)? */
@@ -3127,7 +3233,7 @@ sim_try
             opnd[2] =       memory address, if memory
     */
 
-        case BBS:
+        DO_BBS:
             if (op_bb_n(RUN_PASS, opnd, acc))              /* br if bit set */
             {
                 BRANCHB(brdisp);
@@ -3141,37 +3247,39 @@ sim_try
             }
             break;
 
-        case BBC:
+        DO_BBC:
             if (!op_bb_n (RUN_PASS, opnd, acc))            /* br if bit clr */
                 BRANCHB (brdisp);
             break;
 
-        case BBSS: case BBSSI:
+        DO_BBSS:
+        DO_BBSSI:
             if (op_bb_x (RUN_PASS, opnd, 1, acc, opc == BBSSI))    /* br if set, set */
                 BRANCHB (brdisp);
             break;
 
-        case BBCC: case BBCCI:
+        DO_BBCC:
+        DO_BBCCI:
             if (!op_bb_x (RUN_PASS, opnd, 0, acc, opc == BBCCI))   /* br if clr, clr*/
                 BRANCHB (brdisp);
             break;
 
-        case BBSC:
+        DO_BBSC:
             if (op_bb_x (RUN_PASS, opnd, 0, acc, FALSE))           /* br if clr, set */
                 BRANCHB (brdisp);
             break;
 
-        case BBCS:
+        DO_BBCS:
             if (!op_bb_x (RUN_PASS, opnd, 1, acc, FALSE))          /* br if set, clr */
                 BRANCHB (brdisp);
             break;
 
-        case BLBS:
+        DO_BLBS:
             if (op0 & 1)                                    /* br if bit set */
                 BRANCHB (brdisp);
             break;
 
-        case BLBC:
+        DO_BLBC:
             if ((op0 & 1) == 0)                             /* br if bit clear */
                 BRANCHB (brdisp);
             break;
@@ -3187,7 +3295,7 @@ sim_try
             va      =       memory address
     */
 
-        case EXTV:
+        DO_EXTV:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             if (r & byte_sign[op1])
                 r = r | ~byte_mask[op1];
@@ -3195,7 +3303,7 @@ sim_try
             CC_IIZP_L (r);                                  /* set cc's */
             break;
 
-        case EXTZV:
+        DO_EXTZV:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             WRITE_L (r);                                    /* store field */
             CC_IIZP_L (r);                                  /* set cc's */
@@ -3210,14 +3318,14 @@ sim_try
             opnd[4] =       source2
     */
 
-        case CMPV:
+        DO_CMPV:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             if (r & byte_sign[op1])
                 r = r | ~byte_mask[op1];
             CC_CMP_L (r, op4);                              /* set cc's */
             break;
 
-        case CMPZV:
+        DO_CMPZV:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             CC_CMP_L (r, op4);                              /* set cc's */
             break;
@@ -3233,14 +3341,14 @@ sim_try
             va      =       memory address
     */
 
-        case FFS:
+        DO_FFS:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             temp = op_ffs (RUN_PASS, r, op1);               /* find first 1 */
             WRITE_L (op0 + temp);                           /* store result */
             cc = r? 0: CC_Z;                                /* set cc's */
             break;
 
-        case FFC:
+        DO_FFC:
             r = op_extv (RUN_PASS, opnd, vfldrp1, acc);     /* get field */
             r = r ^ byte_mask[op1];                         /* invert bits */
             temp = op_ffs (RUN_PASS, r, op1);               /* find first 1 */
@@ -3257,7 +3365,7 @@ sim_try
             opnd[4] =       register content/memory address
     */
 
-        case INSV:
+        DO_INSV:
             op_insv (RUN_PASS, opnd, vfldrp1, acc);          /* insert field */
             break;
 
@@ -3267,21 +3375,21 @@ sim_try
             opnd[1] =       procedure address
     */
 
-        case CALLS:
+        DO_CALLS:
             cc = op_call (RUN_PASS, opnd, TRUE, acc);
             break;
 
-        case CALLG:
+        DO_CALLG:
             cc = op_call (RUN_PASS, opnd, FALSE, acc);
             break;
 
-        case RET:
+        DO_RET:
             cc = op_ret (RUN_PASS, acc);
             break;
 
     /* Miscellaneous instructions */
 
-        case HALT:
+        DO_HALT:
             if (PSL & PSL_CUR)                              /* not kern? rsvd inst */
                 RSVD_INST_FAULT;
             else if (cpu_unit->flags & UNIT_CONH)           /* halt to console? */
@@ -3290,49 +3398,49 @@ sim_try
                 ABORT (STOP_HALT);                          /* halt to simulator */
                 }
 
-        case NOP:
+        DO_NOP:
             break;
 
-        case BPT:
+        DO_BPT:
             SETPC (fault_PC);
             cc = intexc (RUN_PASS, SCB_BPT, cc, 0, IE_EXC);
             GET_CUR;
             break;
 
-        case XFC:
+        DO_XFC:
             SETPC (fault_PC);
             cc = intexc (RUN_PASS, SCB_XFC, cc, 0, IE_EXC);
             GET_CUR;
             break;
 
-        case BISPSW:
+        DO_BISPSW:
             if (opnd[0] & PSW_MBZ)
                 RSVD_OPND_FAULT;
             PSL = PSL | (opnd[0] & ~CC_MASK);
             cc = cc | (opnd[0] & CC_MASK);
             break;
 
-        case BICPSW:
+        DO_BICPSW:
             if (opnd[0] & PSW_MBZ)
                 RSVD_OPND_FAULT;
             PSL = PSL & ~opnd[0];
             cc = cc & ~opnd[0];
             break;
 
-        case MOVPSL:
+        DO_MOVPSL:
             r = PSL | cc;
             WRITE_L (r);
             break;
 
-        case PUSHR:
+        DO_PUSHR:
             op_pushr (RUN_PASS, opnd, acc);
             break;
 
-        case POPR:
+        DO_POPR:
             op_popr (RUN_PASS, opnd, acc);
             break;
 
-        case INDEX:
+        DO_INDEX:
             if ((op0 < op1) || (op0 > op2))
                 SET_TRAP (TRAP_SUBSCR);
             r = (op0 + op4) * op3;
@@ -3342,149 +3450,159 @@ sim_try
 
     /* Queue and interlocked queue */
 
-        case INSQUE:
+        DO_INSQUE:
             cc = op_insque (RUN_PASS, opnd, acc);
             break;
 
-        case REMQUE:
+        DO_REMQUE:
             cc = op_remque (RUN_PASS, opnd, acc);
             break;
 
-        case INSQHI:
+        DO_INSQHI:
             cc = op_insqhi (RUN_PASS, opnd, acc);
             break;
 
-        case INSQTI:
+        DO_INSQTI:
             cc = op_insqti (RUN_PASS, opnd, acc);
             break;
 
-        case REMQHI:
+        DO_REMQHI:
             cc = op_remqhi (RUN_PASS, opnd, acc);
             break;
 
-        case REMQTI:
+        DO_REMQTI:
             cc = op_remqti (RUN_PASS, opnd, acc);
             break;
 
     /* String instructions */
 
-        case MOVC3: case MOVC5:
+        DO_MOVC3:
+        DO_MOVC5:
             cc = op_movc (RUN_PASS, opnd, opc & 4, acc);
             break;
 
-        case CMPC3: case CMPC5:
+        DO_CMPC3:
+        DO_CMPC5:
             cc = op_cmpc (RUN_PASS, opnd, opc & 4, acc);
             break;
 
-        case LOCC: case SKPC:
+        DO_LOCC:
+        DO_SKPC:
             cc = op_locskp (RUN_PASS, opnd, opc & 1, acc);
             break;
 
-        case SCANC: case SPANC:
+        DO_SCANC:
+        DO_SPANC:
             cc = op_scnspn (RUN_PASS, opnd, opc & 1, acc);
             break;
 
     /* Floating point instructions */
 
-        case TSTF: case TSTD:
+        DO_TSTF:
+        DO_TSTD:
             r = op_movfd (RUN_PASS, op0);
             CC_IIZZ_FP (r);
             break;
 
-        case TSTG:
+        DO_TSTG:
             r = op_movg (RUN_PASS, op0);
             CC_IIZZ_FP (r);
             break;
 
-        case MOVF:
+        DO_MOVF:
             r = op_movfd (RUN_PASS, op0);
             WRITE_L (r);
             CC_IIZP_FP (r);
             break;
 
-        case MOVD:
+        DO_MOVD:
             if ((r = op_movfd (RUN_PASS, op0)) == 0)
                 op1 = 0;
             WRITE_Q (r, op1);
             CC_IIZP_FP (r);
             break;
 
-        case MOVG:
+        DO_MOVG:
             if ((r = op_movg (RUN_PASS, op0)) == 0)
                 op1 = 0;
             WRITE_Q (r, op1);
             CC_IIZP_FP (r);
             break;
 
-        case MNEGF:
+        DO_MNEGF:
             r = op_mnegfd (RUN_PASS, op0);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case MNEGD:
+        DO_MNEGD:
             if ((r = op_mnegfd (RUN_PASS, op0)) == 0)
                 op1 = 0;
             WRITE_Q (r, op1);
             CC_IIZZ_FP (r);
             break;
 
-        case MNEGG:
+        DO_MNEGG:
             if ((r = op_mnegg (RUN_PASS, op0)) == 0)
                 op1 = 0;
             WRITE_Q (r, op1);
             CC_IIZZ_FP (r);
             break;
 
-        case CMPF:
+        DO_CMPF:
             cc = op_cmpfd (RUN_PASS, op0, 0, op1, 0);
             break;
 
-        case CMPD:
+        DO_CMPD:
             cc = op_cmpfd (RUN_PASS, op0, op1, op2, op3);
             break;
 
-        case CMPG:
+        DO_CMPG:
             cc = op_cmpg (RUN_PASS, op0, op1, op2, op3);
             break;
 
-        case CVTBF:
+        DO_CVTBF:
             r = op_cvtifdg (RUN_PASS, SXTB (op0), NULL, opc);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTWF:
+        DO_CVTWF:
             r = op_cvtifdg (RUN_PASS, SXTW (op0), NULL, opc);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTLF:
+        DO_CVTLF:
             r = op_cvtifdg (RUN_PASS, op0, NULL, opc);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTBD: case CVTBG:
+        DO_CVTBD:
+        DO_CVTBG:
             r = op_cvtifdg (RUN_PASS, SXTB (op0), &rh, opc);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTWD: case CVTWG:
+        DO_CVTWD:
+        DO_CVTWG:
             r = op_cvtifdg (RUN_PASS, SXTW (op0), &rh, opc);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTLD: case CVTLG:
+        DO_CVTLD:
+        DO_CVTLG:
             r = op_cvtifdg (RUN_PASS, op0, &rh, opc);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTFB: case CVTDB: case CVTGB:
+        DO_CVTFB:
+        DO_CVTDB:
+        DO_CVTGB:
             r = op_cvtfdgi (RUN_PASS, opnd, &flg, opc) & BMASK;
             WRITE_B (r);
             CC_IIZZ_B (r);
@@ -3493,7 +3611,9 @@ sim_try
                 }
             break;
 
-        case CVTFW: case CVTDW: case CVTGW:
+        DO_CVTFW:
+        DO_CVTDW:
+        DO_CVTGW:
             r = op_cvtfdgi (RUN_PASS, opnd, &flg, opc) & WMASK;
             WRITE_W (r);
             CC_IIZZ_W (r);
@@ -3502,8 +3622,12 @@ sim_try
                 }
             break;
 
-        case CVTFL: case CVTDL: case CVTGL:
-        case CVTRFL: case CVTRDL: case CVTRGL:
+        DO_CVTFL:
+        DO_CVTDL:
+        DO_CVTGL:
+        DO_CVTRFL:
+        DO_CVTRDL:
+        DO_CVTRGL:
             r = op_cvtfdgi (RUN_PASS, opnd, &flg, opc) & LMASK;
             WRITE_L (r);
             CC_IIZZ_L (r);
@@ -3512,103 +3636,115 @@ sim_try
                 }
             break;
 
-        case CVTFD:
+        DO_CVTFD:
             r = op_movfd (RUN_PASS, op0);
             WRITE_Q (r, 0);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTDF:
+        DO_CVTDF:
             r = op_cvtdf (RUN_PASS, opnd);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTFG:
+        DO_CVTFG:
             r = op_cvtfg (RUN_PASS, opnd, &rh);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case CVTGF:
+        DO_CVTGF:
             r = op_cvtgf (RUN_PASS, opnd);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case ADDF2: case ADDF3:
+        DO_ADDF2:
+        DO_ADDF3:
             r = op_addf (RUN_PASS, opnd, FALSE);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case ADDD2: case ADDD3:
+        DO_ADDD2:
+        DO_ADDD3:
             r = op_addd (RUN_PASS, opnd, &rh, FALSE);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case ADDG2: case ADDG3:
+        DO_ADDG2:
+        DO_ADDG3:
             r = op_addg (RUN_PASS, opnd, &rh, FALSE);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case SUBF2: case SUBF3:
+        DO_SUBF2:
+        DO_SUBF3:
             r = op_addf (RUN_PASS, opnd, TRUE);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case SUBD2: case SUBD3:
+        DO_SUBD2:
+        DO_SUBD3:
             r = op_addd (RUN_PASS, opnd, &rh, TRUE);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case SUBG2: case SUBG3:
+        DO_SUBG2:
+        DO_SUBG3:
             r = op_addg (RUN_PASS, opnd, &rh, TRUE);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case MULF2: case MULF3:
+        DO_MULF2:
+        DO_MULF3:
             r = op_mulf (RUN_PASS, opnd);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case MULD2: case MULD3:
+        DO_MULD2:
+        DO_MULD3:
             r = op_muld (RUN_PASS, opnd, &rh);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case MULG2: case MULG3:
+        DO_MULG2:
+        DO_MULG3:
             r = op_mulg (RUN_PASS, opnd, &rh);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case DIVF2: case DIVF3:
+        DO_DIVF2:
+        DO_DIVF3:
             r = op_divf (RUN_PASS, opnd);
             WRITE_L (r);
             CC_IIZZ_FP (r);
             break;
 
-        case DIVD2: case DIVD3:
+        DO_DIVD2:
+        DO_DIVD3:
             r = op_divd (RUN_PASS, opnd, &rh);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case DIVG2: case DIVG3:
+        DO_DIVG2:
+        DO_DIVG3:
             r = op_divg (RUN_PASS, opnd, &rh);
             WRITE_Q (r, rh);
             CC_IIZZ_FP (r);
             break;
 
-        case ACBF:
+        DO_ACBF:
             r = op_addf (RUN_PASS, opnd + 1, FALSE);        /* add + index */
             temp = op_cmpfd (RUN_PASS, r, 0, op0, 0);       /* result : limit */
             WRITE_L (r);                                    /* write result */
@@ -3618,7 +3754,7 @@ sim_try
                BRANCHW (brdisp);
             break;
 
-        case ACBD:
+        DO_ACBD:
             r = op_addd (RUN_PASS, opnd + 2, &rh, FALSE);
             temp = op_cmpfd (RUN_PASS, r, rh, op0, op1);
             WRITE_Q (r, rh);
@@ -3628,7 +3764,7 @@ sim_try
                BRANCHW (brdisp);
             break;
 
-        case ACBG:
+        DO_ACBG:
             r = op_addg (RUN_PASS, opnd + 2, &rh, FALSE);
             temp = op_cmpg (RUN_PASS, r, rh, op0, op1);
             WRITE_Q (r, rh);
@@ -3647,7 +3783,7 @@ sim_try
             op5:op6 =       floating destination (flt.wl)
     */
 
-        case EMODF:
+        DO_EMODF:
             r = op_emodf (RUN_PASS, opnd, &temp, &flg);
             if (op5 < 0)
                 Read (RUN_PASS, op6, L_LONG, WA);
@@ -3670,7 +3806,7 @@ sim_try
             op7:op8 =       floating destination (flt.wq)
     */
 
-        case EMODD:
+        DO_EMODD:
             r = op_emodd (RUN_PASS, opnd, &rh, &temp, &flg);
             if (op7 < 0) {
                 Read (RUN_PASS, op8, L_BYTE, WA);
@@ -3686,7 +3822,7 @@ sim_try
                 }
             break;
 
-        case EMODG:
+        DO_EMODG:
             r = op_emodg (RUN_PASS, opnd, &rh, &temp, &flg);
             if (op7 < 0) {
                 Read (RUN_PASS, op8, L_BYTE, WA);
@@ -3704,51 +3840,55 @@ sim_try
 
     /* POLY */
 
-        case POLYF:
+        DO_POLYF:
             op_polyf (RUN_PASS, opnd, acc);
             CC_IIZZ_FP (R[0]);
             break;
 
-        case POLYD:
+        DO_POLYD:
             op_polyd (RUN_PASS, opnd, acc);
             CC_IIZZ_FP (R[0]);
             break;
 
-        case POLYG:
+        DO_POLYG:
             op_polyg (RUN_PASS, opnd, acc);
             CC_IIZZ_FP (R[0]);
             break;
 
     /* Operating system instructions */
 
-        case CHMK: case CHME: case CHMS: case CHMU:
+        DO_CHMK:
+        DO_CHME:
+        DO_CHMS:
+        DO_CHMU:
             cc = op_chm (RUN_PASS, opnd, cc, opc);          /* CHMx */
             GET_CUR;                                        /* update cur mode */
             SET_IRQL;                                       /* update intreq */
             break;
 
-        case REI:
+        DO_REI:
             cc = op_rei (RUN_PASS, acc);                    /* REI */
             GET_CUR;                                        /* update cur mode */
             break;
 
-        case LDPCTX:
+        DO_LDPCTX:
             op_ldpctx (RUN_PASS, acc);
             break;
 
-        case SVPCTX:
+        DO_SVPCTX:
             op_svpctx (RUN_PASS, acc);
             break;
 
-        case PROBER: case PROBEW:
+        DO_PROBER:
+        DO_PROBEW:
             cc = (cc & CC_C) | op_probe (RUN_PASS, opnd, opc & 1);
             break;
 
-        case MTPR:
+        DO_MTPR:
             cc = (cc & CC_C) | op_mtpr (RUN_PASS, opnd);
             break;
 
-        case MFPR:
+        DO_MFPR:
             r = op_mfpr (RUN_PASS, opnd);
             WRITE_L (r);
             CC_IIZP_L (r);
@@ -3756,26 +3896,64 @@ sim_try
 
     /* CIS or emulated instructions */
 
-        case CVTPL:
-        case MOVP: case CMPP3: case CMPP4: case CVTLP:
-        case CVTPS: case CVTSP: case CVTTP: case CVTPT:
-        case ADDP4: case ADDP6: case SUBP4: case SUBP6:
-        case MULP: case DIVP: case ASHP: case CRC:
-        case MOVTC: case MOVTUC: case MATCHC: case EDITPC:
+        DO_CVTPL:
+        DO_MOVP:
+        DO_CMPP3:
+        DO_CMPP4:
+        DO_CVTLP:
+        DO_CVTPS:
+        DO_CVTSP:
+        DO_CVTTP:
+        DO_CVTPT:
+        DO_ADDP4:
+        DO_ADDP6:
+        DO_SUBP4:
+        DO_SUBP6:
+        DO_MULP:
+        DO_DIVP:
+        DO_ASHP:
+        DO_CRC:
+        DO_MOVTC:
+        DO_MOVTUC:
+        DO_MATCHC:
+        DO_EDITPC:
             cc = op_cis (RUN_PASS, opnd, cc, opc, acc);
             break;
 
     /* Octaword or reserved instructions */
 
-        case PUSHAO: case MOVAO: case CLRO: case MOVO:
-        case TSTH: case MOVH: case MNEGH: case CMPH:
-        case CVTBH: case CVTWH: case CVTLH:
-        case CVTHB: case CVTHW: case CVTHL: case CVTRHL:
-        case CVTFH: case CVTDH: case CVTGH:
-        case CVTHF: case CVTHD: case CVTHG:
-        case ADDH2: case ADDH3: case SUBH2: case SUBH3:
-        case MULH2: case MULH3: case DIVH2: case DIVH3:
-        case ACBH: case POLYH: case EMODH:
+        DO_PUSHAO:
+        DO_MOVAO:
+        DO_CLRO:
+        DO_MOVO:
+        DO_TSTH:
+        DO_MOVH:
+        DO_MNEGH:
+        DO_CMPH:
+        DO_CVTBH:
+        DO_CVTWH:
+        DO_CVTLH:
+        DO_CVTHB:
+        DO_CVTHW:
+        DO_CVTHL:
+        DO_CVTRHL:
+        DO_CVTFH:
+        DO_CVTDH:
+        DO_CVTGH:
+        DO_CVTHF:
+        DO_CVTHD:
+        DO_CVTHG:
+        DO_ADDH2:
+        DO_ADDH3:
+        DO_SUBH2:
+        DO_SUBH3:
+        DO_MULH2:
+        DO_MULH3:
+        DO_DIVH2:
+        DO_DIVH3:
+        DO_ACBH:
+        DO_POLYH:
+        DO_EMODH:
 #if defined(_DEBUG) && !defined(FULL_VAX)
             /* When running under debugger this place can be hit with irrelevant "variable va uninitialized" 
                and "variable spec uninitialized" warnings */
@@ -3789,13 +3967,13 @@ sim_try
                 }
             break;
 
-        case 0xFF:
+        DO_PSUEDO_BUG:
             op_reserved_ff (RUN_PASS, acc);
             break;
-        default:
+        DO_FAULT:
             RSVD_INST_FAULT;
             break;
-        }                                                   /* end case op */
+        } while(0);                                         /* end case op */
     }                                                       /* end for */
 } /* end try*/
 sim_catch (sim_exception_ABORT, exabort)
